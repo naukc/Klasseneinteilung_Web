@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klasseneinteilung</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <h1>Klasseneinteilung Grundschule</h1>
+            <p class="subtitle">Automatische Einteilung mit Qualitätsprüfung</p>
+        </header>
+
+        <!-- Steuerung -->
+        <section class="controls card">
+            <div class="controls-row">
+                <div class="upload-area">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+                    <button class="btn btn-primary" id="uploadBtn">
+                        <span class="icon">📁</span> Excel-Datei auswählen
+                    </button>
+                    <span class="file-name" id="fileName">Keine Datei ausgewählt</span>
+                </div>
+
+                <div class="config-group">
+                    <label for="anzahlKlassen">Klassen:</label>
+                    <input type="number" id="anzahlKlassen" value="5" min="2" max="26">
+                </div>
+
+                <div class="config-group">
+                    <label for="iterationen">Iterationen:</label>
+                    <input type="number" id="iterationen" value="10000" min="1000" step="1000">
+                </div>
+
+                <button class="btn btn-success" id="startBtn" disabled>
+                    <span class="icon">▶</span> Einteilung starten
+                </button>
+
+                <button class="btn btn-secondary" id="exportBtn" disabled>
+                    <span class="icon">💾</span> Excel-Export
+                </button>
+            </div>
+            <div id="uploadInfo" class="upload-info hidden"></div>
+        </section>
+
+        <!-- Ladebalken -->
+        <div class="progress-container hidden" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">Optimierung läuft...</p>
+        </div>
+
+        <!-- Gesamt-Ampel -->
+        <section class="ampel-banner hidden" id="ampelBanner">
+            <div class="ampel-icon" id="ampelIcon"></div>
+            <div class="ampel-text" id="ampelText"></div>
+            <div class="drag-hint" id="dragHint">Schüler per Drag & Drop zwischen Klassen verschieben</div>
+        </section>
+
+        <!-- Prüfungs-Dashboard -->
+        <section class="dashboard hidden" id="dashboard">
+            <h2>Qualitätsprüfung</h2>
+
+            <!-- Zusammenfassung -->
+            <div class="summary-cards" id="summaryCards"></div>
+
+            <!-- Klassen-Tabelle -->
+            <div class="card">
+                <h3>Prüfergebnisse pro Klasse</h3>
+                <div class="table-wrapper">
+                    <table class="pruefung-table" id="pruefungTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Nicht erfüllte Wünsche -->
+            <div class="card" id="wuenscheCard">
+                <h3>Nicht erfüllte Wünsche <span class="badge" id="wuenscheBadge"></span></h3>
+                <div class="table-wrapper">
+                    <table class="wuensche-table" id="wuenscheTable">
+                        <thead>
+                            <tr>
+                                <th>Schüler</th>
+                                <th>Klasse</th>
+                                <th>Wunschpartner</th>
+                                <th>Klasse Wunschpartner</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Klassenlisten mit Drag & Drop -->
+        <section class="klassen-section hidden" id="klassenSection">
+            <h2>Klassenlisten <span class="hint">(Drag & Drop zum Verschieben)</span></h2>
+            <div class="klassen-grid" id="klassenGrid"></div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+[submodule "lib/klasseneinteilung"]
+	path = lib/klasseneinteilung
+	url = git@github.com:naukc/Klasseneinteilung_Grundschule.git

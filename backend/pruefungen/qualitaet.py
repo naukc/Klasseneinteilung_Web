@@ -249,16 +249,18 @@ def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
         kp.wunsch_ampel = _ampel(kp.wunsch_quote_pct, s["gruen"], s["orange"], niedriger_ist_besser=False)
         alle_ampeln.append(kp.wunsch_ampel)
 
-        # --- 6. Trennungen ---
-        if "Trennen_Von" in df.columns:
+        # --- 6. Trennungen (unterstützt mehrere Trennen_Von_X Spalten) ---
+        trenn_spalten = sorted([c for c in df.columns if str(c).startswith("Trennen_Von")])
+        if trenn_spalten:
             klasse_set = set(map(int, klasse_ids))
             for schueler_id, row in klassen_df.iterrows():
-                sep_val = row.get("Trennen_Von")
-                sep_id = pd.to_numeric(sep_val, errors="coerce")
-                if pd.notna(sep_id):
-                    kp.trennungen_gesamt += 1
-                    if int(sep_id) in klasse_set:
-                        kp.trennungen_missachtet += 1
+                for ts in trenn_spalten:
+                    sep_val = row.get(ts)
+                    sep_id = pd.to_numeric(sep_val, errors="coerce")
+                    if pd.notna(sep_id) and int(sep_id) > 0:
+                        kp.trennungen_gesamt += 1
+                        if int(sep_id) in klasse_set:
+                            kp.trennungen_missachtet += 1
 
         s = SCHWELLEN["trennungen_missachtet"]
         kp.trennungen_ampel = _ampel(kp.trennungen_missachtet, s["gruen"], s["orange"])

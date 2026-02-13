@@ -18,9 +18,9 @@
         <section class="controls card">
             <div class="controls-row">
                 <div class="upload-area">
-                    <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.ods" hidden>
                     <button class="btn btn-primary" id="uploadBtn">
-                        <span class="icon">📁</span> Excel-Datei auswählen
+                        <span class="icon">📁</span> Datei auswählen
                     </button>
                     <span class="file-name" id="fileName">Keine Datei ausgewählt</span>
                 </div>
@@ -43,7 +43,56 @@
                     <span class="icon">💾</span> Excel-Export
                 </button>
             </div>
+
+            <!-- Vorlage herunterladen -->
+            <div class="vorlage-bereich">
+                <span class="vorlage-label">Vorlage herunterladen:</span>
+                <a href="/api/vorlage?format=xlsx" class="vorlage-link" download>Excel (.xlsx)</a>
+                <span class="vorlage-trenner">|</span>
+                <a href="/api/vorlage?format=ods" class="vorlage-link" download>LibreOffice (.ods)</a>
+                <span class="vorlage-hinweis">Numbers-Nutzer: .xlsx direkt in Numbers öffnen</span>
+            </div>
+
             <div id="uploadInfo" class="upload-info hidden"></div>
+        </section>
+
+        <!-- Spalten-Mapping -->
+        <section class="mapping-section card hidden" id="mappingSection">
+            <h2>Spalten zuordnen</h2>
+            <p class="mapping-hint">Einige Spalten konnten nicht automatisch erkannt werden. Bitte ordnen Sie die Spalten aus Ihrer Datei den erwarteten Feldern zu.</p>
+            <div class="mapping-grid" id="mappingGrid"></div>
+            <div class="mapping-actions">
+                <button class="btn btn-success" id="mappingConfirmBtn">Zuordnung übernehmen</button>
+            </div>
+        </section>
+
+        <!-- Schülerliste bearbeiten (Wünsche / Trennungen) -->
+        <section class="schueler-edit-section card hidden" id="schuelerEditSection">
+            <div class="schueler-edit-header">
+                <div>
+                    <h2>Schülerliste <span class="badge badge-info" id="schuelerAnzahlBadge"></span></h2>
+                    <p class="subtitle">Wünsche und Trennungen zuordnen (optional)</p>
+                </div>
+                <button class="btn btn-success" id="confirmDataBtn">
+                    <span class="icon">✓</span> Daten bestätigen & weiter
+                </button>
+            </div>
+            <div class="table-wrapper">
+                <table class="schueler-edit-table" id="schuelerEditTable">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">#</th>
+                            <th class="col-name">Name</th>
+                            <th class="col-geschlecht">Geschl.</th>
+                            <th class="col-auff">Auff.</th>
+                            <th class="col-migration">Migration</th>
+                            <th class="col-wuensche">Wunschpartner (max. 4)</th>
+                            <th class="col-trennung">Trennen von (max. 4)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schuelerEditBody"></tbody>
+                </table>
+            </div>
         </section>
 
         <!-- Ladebalken -->

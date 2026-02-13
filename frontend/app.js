@@ -1,11 +1,23 @@
 /**
- * Klasseneinteilung Web-App – Frontend mit Drag & Drop
+ * Klasseneinteilung Web-App – Frontend
+ *
+ * Features:
+ * - Upload mit intelligentem Spalten-Mapping
+ * - Wunsch-/Trennungs-Zuordnung per Autocomplete
+ * - Optimierung + Qualitätsprüfung
+ * - Drag & Drop zwischen Klassen
  */
 
 const API = "/api";
 
-// --- Aktueller App-State ---
-let currentData = null; // Komplette Antwort von /optimierung oder /verschieben
+// --- Erlaubte Werte (synchron mit Backend) ---
+const ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13];
+const ERLAUBTE_GESCHLECHT = ["m", "w"];
+const ERLAUBTE_MIGRATION = ["Ja", "Nein"];
+
+// --- App-State ---
+let currentData = null;
+let schuelerListe = [];   // Aktuelle Schülerliste aus dem Backend
 
 // --- DOM-Elemente ---
 const fileInput = document.getElementById("fileInput");
@@ -31,7 +43,20 @@ const wuenscheTable = document.getElementById("wuenscheTable");
 const klassenSection = document.getElementById("klassenSection");
 const klassenGrid = document.getElementById("klassenGrid");
 
-// --- Upload ---
+// Neue Elemente
+const mappingSection = document.getElementById("mappingSection");
+const mappingGrid = document.getElementById("mappingGrid");
+const mappingConfirmBtn = document.getElementById("mappingConfirmBtn");
+const schuelerEditSection = document.getElementById("schuelerEditSection");
+const schuelerEditBody = document.getElementById("schuelerEditBody");
+const schuelerAnzahlBadge = document.getElementById("schuelerAnzahlBadge");
+const confirmDataBtn = document.getElementById("confirmDataBtn");
+
+
+// ==========================================================
+// Upload
+// ==========================================================
+
 uploadBtn.addEventListener("click", () => fileInput.click());
 
 fileInput.addEventListener("change", async () => {
@@ -42,6 +67,15 @@ fileInput.addEventListener("change", async () => {
     const formData = new FormData();
     formData.append("file", file);
 
+    // Bisherige Bereiche ausblenden
+    mappingSection.classList.add("hidden");
+    schuelerEditSection.classList.add("hidden");
+    dashboard.classList.add("hidden");
+    ampelBanner.classList.add("hidden");
+    klassenSection.classList.add("hidden");
+    startBtn.disabled = true;
+    exportBtn.disabled = true;
+
     try {
         const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
         if (!res.ok) {
@@ -49,15 +83,461 @@ fileInput.addEventListener("change", async () => {
             throw new Error(err.detail || "Upload fehlgeschlagen");
         }
         const data = await res.json();
-        uploadInfo.textContent = `${data.anzahl_schueler} Schüler eingelesen | ${data.wunsch_spalten} Wunschspalten | Trennung: ${data.hat_trennung ? "Ja" : "Nein"}`;
+
+        uploadInfo.textContent = `${data.anzahl_zeilen} Zeilen erkannt in "${data.dateiname}"`;
         uploadInfo.classList.remove("hidden");
-        startBtn.disabled = false;
+
+        if (data.braucht_mapping) {
+            // Mapping-UI anzeigen
+            zeigeMapping(data.mapping, data.alle_spalten);
+        } else {
+            // Alle Spalten erkannt → direkt zur Schülerliste
+            schuelerListe = data.schueler || [];
+            zeigeSchuelerEditor(schuelerListe, data.validierung || []);
+        }
+
     } catch (err) {
         alert("Fehler beim Upload: " + err.message);
     }
 });
 
-// --- Optimierung starten ---
+
+// ==========================================================
+// Spalten-Mapping UI
+// ==========================================================
+
+let currentMappingData = null;
+
+function zeigeMapping(mapping, alleSpalten) {
+    currentMappingData = { mapping, alleSpalten };
+    mappingGrid.innerHTML = "";
+
+    // Pflichtspalten aus dem Mapping
+    const pflichtSpalten = [
+        "Vorname", "Name", "Geschlecht",
+        "Auffaelligkeit_Score",
+        "Migrationshintergrund / 2. Staatsangehörigkeit",
+    ];
+
+    for (const zielName of pflichtSpalten) {
+        const info = mapping[zielName] || { spalte: null, confidence: "nicht_gefunden" };
+        const row = document.createElement("div");
+        row.className = "mapping-row";
+
+        // Ampel-Indikator
+        const ampelClass = info.confidence === "sicher" ? "gruen"
+            : info.confidence === "vorschlag" ? "orange" : "rot";
+
+        row.innerHTML = `
+            <div class="mapping-ziel">
+                <span class="mapping-ampel ${ampelClass}"></span>
+                <strong>${zielName}</strong>
+            </div>
+            <div class="mapping-pfeil">→</div>
+            <div class="mapping-auswahl">
+                <select data-ziel="${zielName}">
+                    <option value="">— nicht zugeordnet —</option>
+                    ${alleSpalten.map(s =>
+                        `<option value="${s}" ${s === info.spalte ? "selected" : ""}>${s}</option>`
+                    ).join("")}
+                </select>
+            </div>
+        `;
+        mappingGrid.appendChild(row);
+    }
+
+    mappingSection.classList.remove("hidden");
+}
+
+mappingConfirmBtn.addEventListener("click", async () => {
+    const selects = mappingGrid.querySelectorAll("select");
+    const mapping = {};
+
+    for (const sel of selects) {
+        const ziel = sel.dataset.ziel;
+        const wert = sel.value || null;
+        mapping[ziel] = wert;
+    }
+
+    // Validierung: Alle Pflichtspalten zugeordnet?
+    const pflichtFehlt = Object.entries(mapping)
+        .filter(([_, v]) => v === null)
+        .map(([k]) => k);
+
+    if (pflichtFehlt.length > 0) {
+        alert(`Bitte ordnen Sie alle Pflichtspalten zu:\n${pflichtFehlt.join("\n")}`);
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API}/mapping-bestaetigen`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mapping }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Mapping-Bestätigung fehlgeschlagen");
+        }
+        const data = await res.json();
+        schuelerListe = data.schueler || [];
+        mappingSection.classList.add("hidden");
+        zeigeSchuelerEditor(schuelerListe, data.validierung || []);
+    } catch (err) {
+        alert("Fehler: " + err.message);
+    }
+});
+
+
+// ==========================================================
+// Schüler-Editor (Wünsche / Trennungen)
+// ==========================================================
+
+function zeigeSchuelerEditor(schueler, validierung = []) {
+    schuelerListe = schueler;
+    schuelerAnzahlBadge.textContent = schueler.length;
+    schuelerEditBody.innerHTML = "";
+
+    // Validierungshinweise nach Schüler-ID gruppieren
+    const hinweiseMap = {};
+    for (const h of validierung) {
+        if (!hinweiseMap[h.schueler_id]) hinweiseMap[h.schueler_id] = [];
+        hinweiseMap[h.schueler_id].push(h);
+    }
+
+    // Validierungs-Banner anzeigen wenn es Hinweise gibt
+    const existingBanner = document.getElementById("validierungBanner");
+    if (existingBanner) existingBanner.remove();
+
+    if (validierung.length > 0) {
+        const banner = document.createElement("div");
+        banner.id = "validierungBanner";
+        banner.className = "validierung-banner";
+        banner.innerHTML = `
+            <span class="validierung-icon">⚠️</span>
+            <div>
+                <strong>${validierung.length} Hinweis${validierung.length > 1 ? "e" : ""} zu den Eingabedaten</strong>
+                <p>Einige Werte entsprechen nicht den erlaubten Eingaben. Betroffene Zeilen sind markiert. Sie können die Werte direkt in den Dropdowns korrigieren.</p>
+            </div>
+        `;
+        schuelerEditSection.querySelector(".schueler-edit-header").after(banner);
+    }
+
+    for (const s of schueler) {
+        const tr = document.createElement("tr");
+        tr.dataset.schuelerId = s.id;
+
+        const hatHinweise = hinweiseMap[s.id] && hinweiseMap[s.id].length > 0;
+        if (hatHinweise) tr.classList.add("validierung-fehler");
+
+        // Geschlecht-Dropdown
+        const geschlechtOptionen = ERLAUBTE_GESCHLECHT.map(g =>
+            `<option value="${g}" ${g === s.geschlecht ? "selected" : ""}>${g.toUpperCase()}</option>`
+        ).join("");
+        const geschlechtInvalid = s.geschlecht && !ERLAUBTE_GESCHLECHT.includes(s.geschlecht);
+        const geschlechtSelect = `<select class="edit-select edit-geschlecht" data-schueler-id="${s.id}">
+            ${geschlechtInvalid ? `<option value="${s.geschlecht}" selected>${s.geschlecht}</option>` : ""}
+            ${geschlechtOptionen}
+        </select>`;
+
+        // Auffälligkeits-Dropdown
+        const auffWert = Math.round(s.auffaelligkeit);
+        const auffOptionen = ERLAUBTE_AUFFAELLIGKEIT.map(a =>
+            `<option value="${a}" ${a === auffWert ? "selected" : ""}>${a}</option>`
+        ).join("");
+        const auffInvalid = auffWert > 0 && !ERLAUBTE_AUFFAELLIGKEIT.includes(auffWert);
+        const auffSelect = `<select class="edit-select edit-auff" data-schueler-id="${s.id}">
+            <option value="0" ${auffWert === 0 ? "selected" : ""}>–</option>
+            ${auffInvalid ? `<option value="${auffWert}" selected>${auffWert} ⚠</option>` : ""}
+            ${auffOptionen}
+        </select>`;
+
+        // Migration-Dropdown
+        const migWert = s.migration || "";
+        const migOptionen = ERLAUBTE_MIGRATION.map(m =>
+            `<option value="${m}" ${m === migWert ? "selected" : ""}>${m}</option>`
+        ).join("");
+        const migInvalid = migWert && !ERLAUBTE_MIGRATION.includes(migWert);
+        const migSelect = `<select class="edit-select edit-migration" data-schueler-id="${s.id}">
+            <option value="">–</option>
+            ${migInvalid ? `<option value="${migWert}" selected>${migWert} ⚠</option>` : ""}
+            ${migOptionen}
+        </select>`;
+
+        tr.innerHTML = `
+            <td class="col-nr">${s.id}</td>
+            <td class="col-name">${s.vorname} ${s.name}</td>
+            <td class="col-geschlecht">${geschlechtSelect}</td>
+            <td class="col-auff">${auffSelect}</td>
+            <td class="col-migration">${migSelect}</td>
+            <td class="col-wuensche">
+                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche" data-max="4"></div>
+            </td>
+            <td class="col-trennung">
+                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="trennung" data-max="4"></div>
+            </td>
+        `;
+        schuelerEditBody.appendChild(tr);
+
+        // Hinweis-Zeile unterhalb einfügen
+        if (hatHinweise) {
+            const hinweisTr = document.createElement("tr");
+            hinweisTr.className = "validierung-hinweis-row";
+            hinweisTr.innerHTML = `<td colspan="7">${hinweiseMap[s.id].map(h =>
+                `<div class="validierung-hinweis-item">⚠ <strong>${h.spalte}</strong>: ${h.hinweis}</div>`
+            ).join("")}</td>`;
+            schuelerEditBody.appendChild(hinweisTr);
+        }
+    }
+
+    // Autocomplete-Komponenten initialisieren
+    document.querySelectorAll(".autocomplete-container").forEach(container => {
+        const sid = parseInt(container.dataset.schuelerId);
+        const type = container.dataset.type;
+        const max = parseInt(container.dataset.max);
+
+        const s = schueler.find(x => x.id === sid);
+        const vorauswahl = type === "wuensche" ? (s.wuensche || []) : (s.trennen_von || []);
+
+        initAutocomplete(container, sid, max, vorauswahl);
+    });
+
+    schuelerEditSection.classList.remove("hidden");
+    startBtn.disabled = true;
+}
+
+
+// ==========================================================
+// Autocomplete-Komponente
+// ==========================================================
+
+function initAutocomplete(container, eigeneId, maxAuswahl, vorauswahl) {
+    container.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "ac-wrapper";
+
+    const chipsDiv = document.createElement("div");
+    chipsDiv.className = "ac-chips";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "ac-input";
+    input.placeholder = "Name eingeben…";
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "ac-dropdown hidden";
+
+    wrapper.appendChild(chipsDiv);
+    wrapper.appendChild(input);
+    container.appendChild(wrapper);
+    container.appendChild(dropdown);
+
+    // State
+    let ausgewaehlt = new Set();
+
+    // Vorauswahl einfügen
+    for (const id of vorauswahl) {
+        const s = schuelerListe.find(x => x.id === id);
+        if (s) {
+            ausgewaehlt.add(id);
+            chipsDiv.appendChild(erstelleChip(s, () => {
+                ausgewaehlt.delete(id);
+                renderChips();
+            }));
+        }
+    }
+
+    function renderChips() {
+        chipsDiv.innerHTML = "";
+        for (const id of ausgewaehlt) {
+            const s = schuelerListe.find(x => x.id === id);
+            if (s) {
+                chipsDiv.appendChild(erstelleChip(s, () => {
+                    ausgewaehlt.delete(id);
+                    renderChips();
+                }));
+            }
+        }
+        // Input verstecken wenn Max erreicht
+        input.style.display = ausgewaehlt.size >= maxAuswahl ? "none" : "";
+    }
+
+    function erstelleChip(s, onRemove) {
+        const chip = document.createElement("span");
+        chip.className = "ac-chip";
+        chip.innerHTML = `${s.vorname} ${s.name} <button type="button" class="ac-chip-x">&times;</button>`;
+        chip.querySelector(".ac-chip-x").addEventListener("click", (e) => {
+            e.stopPropagation();
+            onRemove();
+        });
+        return chip;
+    }
+
+    function zeigeDropdown(filter) {
+        dropdown.innerHTML = "";
+        const filterLower = filter.toLowerCase();
+
+        const treffer = schuelerListe.filter(s =>
+            s.id !== eigeneId &&
+            !ausgewaehlt.has(s.id) &&
+            (`${s.vorname} ${s.name}`).toLowerCase().includes(filterLower)
+        ).slice(0, 8);
+
+        if (treffer.length === 0) {
+            dropdown.classList.add("hidden");
+            return;
+        }
+
+        for (const s of treffer) {
+            const item = document.createElement("div");
+            item.className = "ac-item";
+            item.innerHTML = `
+                <span class="geschlecht-badge ${s.geschlecht}" style="width:18px;height:18px;line-height:18px;font-size:0.6rem">${s.geschlecht.toUpperCase()}</span>
+                ${s.vorname} ${s.name}
+            `;
+            item.addEventListener("mousedown", (e) => {
+                e.preventDefault(); // Verhindert blur
+                if (ausgewaehlt.size < maxAuswahl) {
+                    ausgewaehlt.add(s.id);
+                    renderChips();
+                    input.value = "";
+                    dropdown.classList.add("hidden");
+                }
+            });
+            dropdown.appendChild(item);
+        }
+        dropdown.classList.remove("hidden");
+    }
+
+    // Events
+    input.addEventListener("input", () => {
+        if (input.value.length >= 1) {
+            zeigeDropdown(input.value);
+        } else {
+            dropdown.classList.add("hidden");
+        }
+    });
+
+    input.addEventListener("focus", () => {
+        if (input.value.length >= 1) {
+            zeigeDropdown(input.value);
+        }
+    });
+
+    input.addEventListener("blur", () => {
+        // Kurze Verzögerung, damit mousedown auf Dropdown-Items noch feuert
+        setTimeout(() => dropdown.classList.add("hidden"), 150);
+    });
+
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            dropdown.classList.add("hidden");
+            input.blur();
+        }
+    });
+
+    // Ausgewählte IDs abfragbar machen
+    container._getAusgewaehlt = () => Array.from(ausgewaehlt);
+
+    // Initial render
+    renderChips();
+}
+
+
+// ==========================================================
+// Daten bestätigen → Wünsche speichern
+// ==========================================================
+
+confirmDataBtn.addEventListener("click", async () => {
+    // Zuordnungen + Korrekturen sammeln
+    const zuordnungen = [];
+
+    for (const s of schuelerListe) {
+        const wuenscheContainer = document.querySelector(
+            `.autocomplete-container[data-schueler-id="${s.id}"][data-type="wuensche"]`
+        );
+        const trennungContainer = document.querySelector(
+            `.autocomplete-container[data-schueler-id="${s.id}"][data-type="trennung"]`
+        );
+
+        // Dropdown-Werte auslesen
+        const geschlechtSel = document.querySelector(`.edit-geschlecht[data-schueler-id="${s.id}"]`);
+        const auffSel = document.querySelector(`.edit-auff[data-schueler-id="${s.id}"]`);
+        const migSel = document.querySelector(`.edit-migration[data-schueler-id="${s.id}"]`);
+
+        zuordnungen.push({
+            schueler_id: s.id,
+            wuensche: wuenscheContainer?._getAusgewaehlt() || [],
+            trennen_von: trennungContainer?._getAusgewaehlt() || [],
+            geschlecht: geschlechtSel?.value || null,
+            auffaelligkeit: auffSel ? parseInt(auffSel.value) : null,
+            migration: migSel?.value || null,
+        });
+    }
+
+    try {
+        confirmDataBtn.disabled = true;
+        confirmDataBtn.textContent = "Speichere…";
+
+        const res = await fetch(`${API}/wuensche-speichern`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ zuordnungen }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Speichern fehlgeschlagen");
+        }
+        const data = await res.json();
+
+        // Upload-Info aktualisieren
+        uploadInfo.textContent = `${data.anzahl_schueler} Schüler | ${data.wunsch_spalten} Wunschspalten | Trennung: ${data.hat_trennung ? "Ja" : "Nein"} | ${data.schueler_mit_wuenschen} Schüler mit Wünschen`;
+        uploadInfo.classList.remove("hidden");
+
+        // Validierungshinweise entfernen wenn alles OK
+        if (data.validierung && data.validierung.length === 0) {
+            document.querySelectorAll(".validierung-fehler").forEach(el => el.classList.remove("validierung-fehler"));
+            document.querySelectorAll(".validierung-hinweis-row").forEach(el => el.remove());
+            const banner = document.getElementById("validierungBanner");
+            if (banner) banner.remove();
+        } else if (data.validierung && data.validierung.length > 0) {
+            // Noch Fehler vorhanden → Schülerliste mit neuen Hinweisen neu laden
+            const schuelerRes = await fetch(`${API}/schueler`);
+            if (schuelerRes.ok) {
+                const schuelerData = await schuelerRes.json();
+                schuelerListe = schuelerData.schueler || [];
+                zeigeSchuelerEditor(schuelerListe, data.validierung);
+            }
+        }
+
+        // Start-Button aktivieren (auch mit Warnungen – die sind nur Hinweise)
+        startBtn.disabled = false;
+
+        // Visuelles Feedback
+        confirmDataBtn.innerHTML = `<span class="icon">✓</span> Gespeichert!`;
+        confirmDataBtn.classList.remove("btn-success");
+        confirmDataBtn.classList.add("btn-secondary");
+
+        setTimeout(() => {
+            confirmDataBtn.innerHTML = `<span class="icon">✓</span> Daten bestätigen & weiter`;
+            confirmDataBtn.classList.remove("btn-secondary");
+            confirmDataBtn.classList.add("btn-success");
+            confirmDataBtn.disabled = false;
+        }, 2000);
+
+    } catch (err) {
+        alert("Fehler: " + err.message);
+        confirmDataBtn.disabled = false;
+        confirmDataBtn.innerHTML = `<span class="icon">✓</span> Daten bestätigen & weiter`;
+    }
+});
+
+
+// ==========================================================
+// Optimierung starten
+// ==========================================================
+
 startBtn.addEventListener("click", async () => {
     startBtn.disabled = true;
     exportBtn.disabled = true;
@@ -96,6 +576,11 @@ startBtn.addEventListener("click", async () => {
         setTimeout(() => {
             progressContainer.classList.add("hidden");
             renderAlles(data);
+
+            // Info über erzwungene Trennungs-Verschiebungen
+            if (data.trennungen_erzwungen && data.trennungen_erzwungen.length > 0) {
+                zeigeTrennungsInfo(data.trennungen_erzwungen);
+            }
         }, 500);
 
     } catch (err) {
@@ -107,10 +592,15 @@ startBtn.addEventListener("click", async () => {
     }
 });
 
-// --- Export ---
+
+// ==========================================================
+// Export
+// ==========================================================
+
 exportBtn.addEventListener("click", () => {
     window.location.href = `${API}/export`;
 });
+
 
 // ==========================================================
 // Rendering
@@ -220,6 +710,7 @@ function renderWuensche(pruefung) {
     }
 }
 
+
 // ==========================================================
 // Klassenlisten mit Drag & Drop
 // ==========================================================
@@ -237,7 +728,6 @@ function renderKlassen(klassen) {
         </div>
     `).join("");
 
-    // Drag & Drop Events registrieren
     initDragAndDrop();
 }
 
@@ -254,6 +744,7 @@ function schuelerRowHtml(s) {
         </div>
     `;
 }
+
 
 // ==========================================================
 // Drag & Drop Logik
@@ -325,19 +816,14 @@ async function onDrop(e) {
     const card = targetZone.closest(".klasse-card");
     if (card) card.classList.remove("drag-over");
 
-    // Gleiche Klasse = nichts tun
     if (targetKlasseIdx === sourceKlasseIdx) return;
 
-    // Sofort im UI verschieben (optimistisch)
     if (draggedElement) {
         targetZone.appendChild(draggedElement);
         draggedElement.classList.remove("dragging");
     }
 
-    // Neue Einteilung aus dem DOM auslesen
     const neueEinteilung = bauEinteilungAusDOM();
-
-    // An Backend senden und Prüfung aktualisieren
     await sendeVerschiebung(neueEinteilung);
 }
 
@@ -370,13 +856,11 @@ async function sendeVerschiebung(neueEinteilung) {
         const data = await res.json();
         currentData = data;
 
-        // Dashboard aktualisieren (ohne Klassen neu zu rendern – die sind ja schon verschoben)
         renderAmpel(data.pruefung);
         renderSummary(data.pruefung);
         renderPruefungTabelle(data.pruefung);
         renderWuensche(data.pruefung);
 
-        // Klassen-Header aktualisieren (Schüleranzahl)
         data.klassen.forEach((klasse, idx) => {
             const card = document.querySelector(`.klasse-card[data-klasse-idx="${idx}"]`);
             if (card) {
@@ -385,11 +869,94 @@ async function sendeVerschiebung(neueEinteilung) {
             }
         });
 
+        // Warnung bei verletzten Trennungen
+        if (data.trennungen_verletzt && data.trennungen_verletzt.length > 0) {
+            zeigeTrennungsWarnung(data.trennungen_verletzt);
+        } else {
+            entferneTrennungsWarnung();
+        }
+
     } catch (err) {
         console.error("Verschiebung fehlgeschlagen:", err);
-        // Bei Fehler: komplett neu rendern aus letztem guten State
         if (currentData) {
             renderKlassen(currentData.klassen);
         }
     }
+}
+
+
+// ==========================================================
+// Trennungs-Warnungen und -Info
+// ==========================================================
+
+/**
+ * Zeigt eine Warnung an, wenn Trennungen durch manuelle Verschiebung verletzt wurden.
+ */
+function zeigeTrennungsWarnung(verletzungen) {
+    entferneTrennungsWarnung();
+
+    const banner = document.createElement("div");
+    banner.id = "trennungWarnung";
+    banner.className = "trennung-warnung";
+
+    const zeilen = verletzungen.map(v =>
+        `<strong>${v.schueler_a.name}</strong> und <strong>${v.schueler_b.name}</strong> sind beide in Klasse ${v.klasse}`
+    ).join("<br>");
+
+    banner.innerHTML = `
+        <span class="trennung-warnung-icon">⛔</span>
+        <div>
+            <strong>Trennungen verletzt!</strong>
+            <p>Folgende Schüler sollten getrennt werden, sind aber in derselben Klasse:</p>
+            <div class="trennung-warnung-details">${zeilen}</div>
+            <p class="trennung-warnung-hint">Bitte verschieben Sie einen der Schüler in eine andere Klasse.</p>
+        </div>
+    `;
+
+    // Vor den Klassen-Karten einfügen
+    const klassenGrid = document.getElementById("klassenGrid");
+    if (klassenGrid) {
+        klassenGrid.parentNode.insertBefore(banner, klassenGrid);
+    }
+}
+
+function entferneTrennungsWarnung() {
+    const existing = document.getElementById("trennungWarnung");
+    if (existing) existing.remove();
+}
+
+/**
+ * Zeigt eine Info an, welche Schüler nach der Optimierung automatisch verschoben wurden,
+ * um Trennungen zu erzwingen.
+ */
+function zeigeTrennungsInfo(log) {
+    entferneTrennungsInfo();
+
+    const banner = document.createElement("div");
+    banner.id = "trennungInfo";
+    banner.className = "trennung-info";
+
+    const zeilen = log.map(e =>
+        `<strong>${e.name}</strong>: Klasse ${e.von_klasse} → Klasse ${e.nach_klasse} (${e.grund})`
+    ).join("<br>");
+
+    banner.innerHTML = `
+        <span class="trennung-info-icon">ℹ️</span>
+        <div>
+            <strong>${log.length} Schüler wurden nach der Optimierung verschoben</strong>
+            <p>Um alle Trennungen einzuhalten, wurden folgende Anpassungen vorgenommen:</p>
+            <div class="trennung-info-details">${zeilen}</div>
+        </div>
+        <button class="trennung-info-close" onclick="entferneTrennungsInfo()">✕</button>
+    `;
+
+    const klassenGrid = document.getElementById("klassenGrid");
+    if (klassenGrid) {
+        klassenGrid.parentNode.insertBefore(banner, klassenGrid);
+    }
+}
+
+function entferneTrennungsInfo() {
+    const existing = document.getElementById("trennungInfo");
+    if (existing) existing.remove();
 }

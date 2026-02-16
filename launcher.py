@@ -8,11 +8,11 @@ automatisch nach kurzer Wartezeit.
 """
 
 import os
+import subprocess
 import sys
 import socket
 import threading
 import time
-import webbrowser
 
 import uvicorn
 
@@ -49,6 +49,34 @@ def warte_auf_server(port: int, timeout: float = 15.0) -> bool:
         except OSError:
             time.sleep(0.1)
     return False
+
+
+def oeffne_browser(url: str) -> None:
+    """
+    Öffnet die URL im Standard-Browser.
+    Im gepackten Modus wird LD_LIBRARY_PATH bereinigt, damit System-Programme
+    nicht die gebündelten PyInstaller-Bibliotheken laden (verursacht Symbol-Fehler).
+    """
+    if getattr(sys, "frozen", False):
+        env = os.environ.copy()
+        # PyInstaller setzt LD_LIBRARY_PATH auf _internal/ – das muss für
+        # externe Programme (Browser, Shell) zurückgesetzt werden
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("LD_LIBRARY_PATH_ORIG", None)
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            # Fallback: webbrowser-Modul mit bereinigter Umgebung
+            import webbrowser
+            webbrowser.open(url)
+    else:
+        import webbrowser
+        webbrowser.open(url)
 
 
 def heartbeat_watchdog() -> None:
@@ -100,7 +128,10 @@ def main() -> None:
         watchdog_thread.start()
 
     # Browser öffnen
-    webbrowser.open(url)
+    # Im gepackten Modus muss LD_LIBRARY_PATH bereinigt werden, da PyInstaller
+    # seine gebündelten .so-Dateien dort einfügt. Das verwirrt System-Programme
+    # wie /bin/sh, die zum Starten des Browsers genutzt werden.
+    oeffne_browser(url)
     print(f"Klasseneinteilung gestartet: {url}")
     print("Die App beendet sich automatisch wenn der Browser-Tab geschlossen wird.")
 

@@ -10,6 +10,34 @@
 
 const API = "/api";
 
+// ==========================================================
+// Dark Mode Toggle
+// ==========================================================
+
+(function initTheme() {
+    const toggle = document.getElementById("themeToggle");
+    const gespeichertesTheme = localStorage.getItem("theme");
+
+    // System-Präferenz prüfen, falls nichts gespeichert
+    const bevorzugtDunkel = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const theme = gespeichertesTheme || (bevorzugtDunkel ? "dark" : "light");
+
+    if (theme === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+        toggle.checked = true;
+    }
+
+    toggle.addEventListener("change", () => {
+        if (toggle.checked) {
+            document.documentElement.setAttribute("data-theme", "dark");
+            localStorage.setItem("theme", "dark");
+        } else {
+            document.documentElement.removeAttribute("data-theme");
+            localStorage.setItem("theme", "light");
+        }
+    });
+})();
+
 // --- Erlaubte Werte (synchron mit Backend) ---
 const ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13];
 const ERLAUBTE_GESCHLECHT = ["m", "w"];

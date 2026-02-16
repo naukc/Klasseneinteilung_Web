@@ -1,0 +1,99 @@
+name: Build Desktop App
+
+on:
+  # Automatisch bei Version-Tags (z.B. v1.0, v1.2.3)
+  push:
+    tags:
+      - "v*"
+  # Manueller Trigger über GitHub UI
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Nötig für Release-Erstellung
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: Klasseneinteilung-Linux
+            asset_name: Klasseneinteilung-Linux.tar.gz
+          - os: windows-latest
+            artifact_name: Klasseneinteilung-Windows
+            asset_name: Klasseneinteilung-Windows.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Python-Abhängigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Build mit PyInstaller
+        run: pyinstaller klasseneinteilung.spec --clean --noconfirm
+
+      # Linux: tar.gz erstellen
+      - name: Archiv erstellen (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar -czf ../${{ matrix.asset_name }} Klasseneinteilung/
+
+      # Windows: zip erstellen
+      - name: Archiv erstellen (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd dist
+          Compress-Archive -Path Klasseneinteilung -DestinationPath ..\${{ matrix.asset_name }}
+
+      # Artifact hochladen (für jeden Build verfügbar)
+      - name: Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}
+
+  # Release erstellen und Artifacts anhängen (nur bei Tags)
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Artifacts herunterladen
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Klasseneinteilung ${{ github.ref_name }}"
+          body: |
+            ## Download
+
+            | Betriebssystem | Download |
+            |---|---|
+            | Windows | `Klasseneinteilung-Windows.zip` |
+            | Linux | `Klasseneinteilung-Linux.tar.gz` |
+
+            ### Installation
+
+            **Windows:** ZIP entpacken → `Klasseneinteilung.exe` starten.
+
+            **Linux:** Archiv entpacken → `./Klasseneinteilung` ausführen.
+          files: |
+            Klasseneinteilung-Windows.zip
+            Klasseneinteilung-Linux.tar.gz
+          draft: false
+          prerelease: false

@@ -11,21 +11,28 @@ Endpunkte:
 - POST /api/verschieben         → Manuelle Verschiebung
 - GET  /api/pruefung            → Qualitätsprüfung abrufen
 - GET  /api/export              → Excel-Export herunterladen
+- POST /api/heartbeat           → Heartbeat vom Frontend (für Auto-Shutdown)
 """
 
 import sys
+import json
+import time
+import queue
 import tempfile
+import threading
 from pathlib import Path
 from dataclasses import asdict
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 import pandas as pd
 
+from backend.pfade import get_lib_path, get_upload_dir
+
 # Submodul-Pfad einbinden
-LIB_PATH = str(Path(__file__).resolve().parent.parent.parent / "lib" / "klasseneinteilung")
+LIB_PATH = str(get_lib_path())
 if LIB_PATH not in sys.path:
     sys.path.insert(0, LIB_PATH)
 
@@ -58,6 +65,9 @@ _state = {
     "raw_spalten": None,       # Roh-Spalten der hochgeladenen Datei
     "mapping_vorschlaege": None,  # Ergebnis von finde_spalten_mapping()
 }
+
+# Letzter Heartbeat-Zeitstempel (für Auto-Shutdown im gepackten Modus)
+letzter_heartbeat: float = time.time()
 
 
 # ---------------------------------------------------------------------------
@@ -366,8 +376,7 @@ async def upload_datei(file: UploadFile = File(...)):
         )
 
     # Temporär speichern
-    upload_dir = Path(__file__).resolve().parent.parent / "uploads"
-    upload_dir.mkdir(exist_ok=True)
+    upload_dir = get_upload_dir()
     upload_path = upload_dir / file.filename
 
     content = await file.read()
@@ -542,45 +551,97 @@ def starte_optimierung(
     start_temp: float = OPT_START_TEMPERATUR,
     cooling_rate: float = OPT_COOLING_RATE,
 ):
-    """Einteilung mit Simulated Annealing optimieren (sync, läuft im Threadpool)."""
+    """
+    Einteilung mit Simulated Annealing optimieren.
+    Liefert Server-Sent Events (SSE) mit Live-Fortschritt.
+    """
     if _state["df"] is None:
         raise HTTPException(status_code=400, detail="Bitte zuerst eine Datei hochladen.")
 
-    df = _state["df"]
-    # Submodul erwartet eine einzelne Trennen_Von-Spalte
-    df_algo = _df_fuer_submodul(df)
+    fortschritt_queue: queue.Queue = queue.Queue()
 
-    gesamtstatistiken = berechne_gesamtstatistiken(df_algo, anzahl_klassen)
+    def fortschritt_callback(iteration: int, aktueller_score: float, bester_score: float):
+        """Wird vom Optimierer alle 500 Iterationen aufgerufen."""
+        fortschritt_queue.put({
+            "type": "fortschritt",
+            "iteration": iteration,
+            "iterationen_gesamt": iterationen,
+            "aktueller_score": round(aktueller_score, 2),
+            "bester_score": round(bester_score, 2),
+            "prozent": round(iteration / iterationen * 100, 1),
+        })
 
-    start_einteilung = erstelle_zufaellige_einteilung(df_algo.index, anzahl_klassen)
-    finale_einteilung, finaler_score = optimiere_mit_sprengel(
-        start_einteilung, df_algo, gesamtstatistiken, anzahl_klassen,
-        iterationen=iterationen,
-        start_temp=start_temp,
-        cooling_rate=cooling_rate,
+    def optimierung_thread():
+        """Führt die Optimierung in einem separaten Thread aus."""
+        try:
+            df = _state["df"]
+            df_algo = _df_fuer_submodul(df)
+
+            gesamtstatistiken = berechne_gesamtstatistiken(df_algo, anzahl_klassen)
+            start_einteilung = erstelle_zufaellige_einteilung(df_algo.index, anzahl_klassen)
+
+            finale_einteilung, finaler_score = optimiere_mit_sprengel(
+                start_einteilung, df_algo, gesamtstatistiken, anzahl_klassen,
+                fortschritt_callback=fortschritt_callback,
+                iterationen=iterationen,
+                start_temp=start_temp,
+                cooling_rate=cooling_rate,
+            )
+
+            # Harte Regel: ALLE Trennungen erzwingen (Post-Processing)
+            finale_einteilung, trenn_log = _erzwinge_trennungen(finale_einteilung, df)
+
+            _state["einteilung"] = finale_einteilung
+
+            pruefung = pruefe_einteilung(finale_einteilung, df)
+            _state["pruefung"] = pruefung
+
+            antwort = {
+                "type": "ergebnis",
+                "status": "ok",
+                "score": round(finaler_score, 2),
+                "anzahl_klassen": anzahl_klassen,
+                "klassen": _klassen_daten_aus_einteilung(df, finale_einteilung),
+                "pruefung": asdict(pruefung),
+            }
+
+            if trenn_log:
+                antwort["trennungen_erzwungen"] = trenn_log
+
+            fortschritt_queue.put(antwort)
+
+        except Exception as e:
+            fortschritt_queue.put({
+                "type": "fehler",
+                "detail": str(e),
+            })
+
+    def event_generator():
+        """SSE-Generator: Liefert Fortschritt und Ergebnis als Events."""
+        thread = threading.Thread(target=optimierung_thread, daemon=True)
+        thread.start()
+
+        while True:
+            try:
+                event = fortschritt_queue.get(timeout=30)
+            except queue.Empty:
+                # Keep-alive senden damit die Verbindung nicht abbricht
+                yield "data: {\"type\": \"keepalive\"}\n\n"
+                continue
+
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+            if event.get("type") in ("ergebnis", "fehler"):
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
-
-    # Harte Regel: ALLE Trennungen erzwingen (Post-Processing)
-    finale_einteilung, trenn_log = _erzwinge_trennungen(finale_einteilung, df)
-
-    _state["einteilung"] = finale_einteilung
-
-    # Prüfung mit Original-df (alle Trennungsspalten)
-    pruefung = pruefe_einteilung(finale_einteilung, df)
-    _state["pruefung"] = pruefung
-
-    antwort = {
-        "status": "ok",
-        "score": round(finaler_score, 2),
-        "anzahl_klassen": anzahl_klassen,
-        "klassen": _klassen_daten_aus_einteilung(df, finale_einteilung),
-        "pruefung": asdict(pruefung),
-    }
-
-    if trenn_log:
-        antwort["trennungen_erzwungen"] = trenn_log
-
-    return antwort
 
 
 # ---------------------------------------------------------------------------
@@ -734,3 +795,18 @@ def exportiere_excel():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="Klasseneinteilung_Ergebnis.xlsx",
     )
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat (für Auto-Shutdown im gepackten Modus)
+# ---------------------------------------------------------------------------
+
+@router.post("/heartbeat")
+def heartbeat():
+    """
+    Heartbeat vom Frontend. Aktualisiert den Zeitstempel,
+    damit der Watchdog im Launcher weiß, dass der Browser-Tab noch offen ist.
+    """
+    global letzter_heartbeat
+    letzter_heartbeat = time.time()
+    return {"status": "ok"}

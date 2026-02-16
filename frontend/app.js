@@ -11,6 +11,14 @@
 const API = "/api";
 
 // ==========================================================
+// Heartbeat (für Auto-Shutdown der Desktop-App)
+// ==========================================================
+
+setInterval(() => {
+    fetch(`${API}/heartbeat`, { method: "POST" }).catch(() => {});
+}, 3000);
+
+// ==========================================================
 // Dark Mode Toggle
 // ==========================================================
 
@@ -578,13 +586,7 @@ startBtn.addEventListener("click", async () => {
 
     progressContainer.classList.remove("hidden");
     progressFill.style.width = "0%";
-    progressText.textContent = "Optimierung läuft...";
-
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress = Math.min(progress + Math.random() * 5, 90);
-        progressFill.style.width = progress + "%";
-    }, 300);
+    progressText.textContent = "Optimierung wird gestartet...";
 
     try {
         const params = new URLSearchParams({
@@ -597,25 +599,63 @@ startBtn.addEventListener("click", async () => {
             const err = await res.json();
             throw new Error(err.detail || "Optimierung fehlgeschlagen");
         }
-        const data = await res.json();
-        currentData = data;
 
-        clearInterval(progressInterval);
+        // SSE-Stream lesen
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let ergebnis = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // SSE-Events parsen (getrennt durch doppelte Newlines)
+            const teile = buffer.split("\n\n");
+            buffer = teile.pop(); // Unvollständiges Event behalten
+
+            for (const teil of teile) {
+                const zeile = teil.trim();
+                if (!zeile.startsWith("data: ")) continue;
+
+                let event;
+                try {
+                    event = JSON.parse(zeile.slice(6));
+                } catch { continue; }
+
+                if (event.type === "fortschritt") {
+                    progressFill.style.width = event.prozent + "%";
+                    progressText.textContent =
+                        `Iteration ${event.iteration.toLocaleString("de-DE")} / ${event.iterationen_gesamt.toLocaleString("de-DE")}` +
+                        ` — Score: ${event.bester_score}`;
+                } else if (event.type === "ergebnis") {
+                    ergebnis = event;
+                } else if (event.type === "fehler") {
+                    throw new Error(event.detail || "Optimierung fehlgeschlagen");
+                }
+            }
+        }
+
+        if (!ergebnis) {
+            throw new Error("Keine Ergebnisse vom Server erhalten");
+        }
+
+        currentData = ergebnis;
         progressFill.style.width = "100%";
-        progressText.textContent = `Fertig! Score: ${data.score}`;
+        progressText.textContent = `Fertig! Score: ${ergebnis.score}`;
 
         setTimeout(() => {
             progressContainer.classList.add("hidden");
-            renderAlles(data);
+            renderAlles(ergebnis);
 
-            // Info über erzwungene Trennungs-Verschiebungen
-            if (data.trennungen_erzwungen && data.trennungen_erzwungen.length > 0) {
-                zeigeTrennungsInfo(data.trennungen_erzwungen);
+            if (ergebnis.trennungen_erzwungen && ergebnis.trennungen_erzwungen.length > 0) {
+                zeigeTrennungsInfo(ergebnis.trennungen_erzwungen);
             }
         }, 500);
 
     } catch (err) {
-        clearInterval(progressInterval);
         progressContainer.classList.add("hidden");
         alert("Fehler: " + err.message);
     } finally {

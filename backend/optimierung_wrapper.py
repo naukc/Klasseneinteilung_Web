@@ -5,11 +5,15 @@ Erweitert die Bewertungsfunktion um das Laufpartner-Kriterium (Sprengel),
 ohne das Submodul selbst zu verändern. Nutzt dafür Monkey-Patching:
 Vor der Optimierung wird `algorithmus.bewerte_einteilung` temporär durch
 eine erweiterte Version ersetzt und danach wiederhergestellt.
+
+Unterstützt optional einen Fortschritts-Callback, der alle N Iterationen
+aufgerufen wird (für Live-Fortschrittsanzeige im Frontend).
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from typing import Callable
 
 import pandas as pd
 
@@ -60,11 +64,15 @@ def _sprengel_bonus(einteilung: list, df: pd.DataFrame, punkte_pro_schueler: flo
     return bonus
 
 
+FORTSCHRITT_INTERVALL = 500
+
+
 def optimiere_mit_sprengel(
     einteilung: list,
     df: pd.DataFrame,
     gesamt_stats: dict,
     anzahl_klassen: int,
+    fortschritt_callback: Callable[[int, float, float], None] | None = None,
     **kwargs,
 ) -> tuple[list, float]:
     """
@@ -72,6 +80,10 @@ def optimiere_mit_sprengel(
 
     Patcht temporär `algorithmus.bewerte_einteilung`, führt die Optimierung
     aus und stellt die Original-Funktion danach wieder her.
+
+    Args:
+        fortschritt_callback: Optional. Wird alle FORTSCHRITT_INTERVALL Iterationen
+            aufgerufen mit (iteration, aktueller_score, bester_score).
     """
     import algorithmus
     from algorithmus import bewerte_einteilung as original_bewertung
@@ -79,21 +91,34 @@ def optimiere_mit_sprengel(
     from config import PUNKTE_SPRENGEL_GLEICH
 
     hat_sprengel = "Sprengel" in df.columns and df["Sprengel"].notna().any()
+    iterationen = kwargs.get("iterationen", 50000)
 
-    if not hat_sprengel:
-        # Kein Sprengel vorhanden → Original-Algorithmus ohne Änderung
-        return optimiere_einteilung(
-            einteilung, df, gesamt_stats, anzahl_klassen, **kwargs
-        )
+    # Zähler für Fortschritts-Callback (mutable Liste für Closure-Zugriff)
+    zaehler = [0]
+    letzter_score = [0.0]
+    bester_score_tracker = [float("-inf")]
 
-    # Erweiterte Bewertungsfunktion
-    def erweiterte_bewertung(einteilung, df, gesamt_stats):
-        score = original_bewertung(einteilung, df, gesamt_stats)
-        score += _sprengel_bonus(einteilung, df, PUNKTE_SPRENGEL_GLEICH)
+    def bewertung_mit_fortschritt(einteilung, df, gesamt_stats):
+        if hat_sprengel:
+            score = original_bewertung(einteilung, df, gesamt_stats)
+            score += _sprengel_bonus(einteilung, df, PUNKTE_SPRENGEL_GLEICH)
+        else:
+            score = original_bewertung(einteilung, df, gesamt_stats)
+
+        zaehler[0] += 1
+        letzter_score[0] = score
+        if score > bester_score_tracker[0]:
+            bester_score_tracker[0] = score
+
+        # Fortschritt melden (Zähler -1 wegen initialem Aufruf vor der Schleife)
+        iteration = zaehler[0] - 1
+        if fortschritt_callback and iteration > 0 and iteration % FORTSCHRITT_INTERVALL == 0:
+            fortschritt_callback(iteration, score, bester_score_tracker[0])
+
         return score
 
     # Monkey-Patch: Bewertungsfunktion temporär ersetzen
-    algorithmus.bewerte_einteilung = erweiterte_bewertung
+    algorithmus.bewerte_einteilung = bewertung_mit_fortschritt
     try:
         ergebnis = optimiere_einteilung(
             einteilung, df, gesamt_stats, anzahl_klassen, **kwargs

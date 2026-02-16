@@ -627,6 +627,21 @@ tr.validierung-fehler td {
     background: #fee2e2;
 }
 
+.ac-id-badge {
+    font-size: 0.7rem;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.ac-chip .ac-id-badge {
+    background: #dbeafe;
+    color: #3b82f6;
+}
+
 .ac-dropdown {
     position: absolute;
     top: 100%;

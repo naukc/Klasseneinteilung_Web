@@ -366,7 +366,7 @@ function initAutocomplete(container, eigeneId, maxAuswahl, vorauswahl) {
     function erstelleChip(s, onRemove) {
         const chip = document.createElement("span");
         chip.className = "ac-chip";
-        chip.innerHTML = `${s.vorname} ${s.name} <button type="button" class="ac-chip-x">&times;</button>`;
+        chip.innerHTML = `${s.vorname} ${s.name} <span class="ac-id-badge">#${s.id}</span> <button type="button" class="ac-chip-x">&times;</button>`;
         chip.querySelector(".ac-chip-x").addEventListener("click", (e) => {
             e.stopPropagation();
             onRemove();
@@ -381,7 +381,7 @@ function initAutocomplete(container, eigeneId, maxAuswahl, vorauswahl) {
         const treffer = schuelerListe.filter(s =>
             s.id !== eigeneId &&
             !ausgewaehlt.has(s.id) &&
-            (`${s.vorname} ${s.name}`).toLowerCase().includes(filterLower)
+            (`${s.vorname} ${s.name} ${s.id}`).toLowerCase().includes(filterLower)
         ).slice(0, 8);
 
         if (treffer.length === 0) {
@@ -394,7 +394,7 @@ function initAutocomplete(container, eigeneId, maxAuswahl, vorauswahl) {
             item.className = "ac-item";
             item.innerHTML = `
                 <span class="geschlecht-badge ${s.geschlecht}" style="width:18px;height:18px;line-height:18px;font-size:0.6rem">${s.geschlecht.toUpperCase()}</span>
-                ${s.vorname} ${s.name}
+                ${s.vorname} ${s.name} <span class="ac-id-badge">#${s.id}</span>
             `;
             item.addEventListener("mousedown", (e) => {
                 e.preventDefault(); // Verhindert blur

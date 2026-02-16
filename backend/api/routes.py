@@ -29,10 +29,11 @@ LIB_PATH = str(Path(__file__).resolve().parent.parent.parent / "lib" / "klassene
 if LIB_PATH not in sys.path:
     sys.path.insert(0, LIB_PATH)
 
-from algorithmus import erstelle_zufaellige_einteilung, optimiere_einteilung
+from algorithmus import erstelle_zufaellige_einteilung
 from config import ANZAHL_KLASSEN, OPT_ITERATIONEN, OPT_START_TEMPERATUR, OPT_COOLING_RATE
 from utils import berechne_gesamtstatistiken
 
+from backend.optimierung_wrapper import optimiere_mit_sprengel
 from backend.pruefungen.qualitaet import pruefe_einteilung, _get_class_name
 from backend.vorlage import generiere_xlsx_vorlage, generiere_ods_vorlage
 from backend.spaltenmapping import (
@@ -274,6 +275,9 @@ def _schueler_liste_aus_df(df: pd.DataFrame) -> list[dict]:
         auff_raw = pd.to_numeric(row.get("Auffaelligkeit_Score", 0), errors="coerce")
         auff = 0.0 if pd.isna(auff_raw) else float(auff_raw)
 
+        sprengel_wert = row.get("Sprengel", "")
+        sprengel = str(sprengel_wert).strip() if pd.notna(sprengel_wert) else ""
+
         schueler.append({
             "id": int(sid),
             "vorname": str(row.get("Vorname", "")),
@@ -281,6 +285,7 @@ def _schueler_liste_aus_df(df: pd.DataFrame) -> list[dict]:
             "geschlecht": str(row.get("Geschlecht", "")),
             "auffaelligkeit": auff,
             "migration": str(row.get("Migrationshintergrund / 2. Staatsangehörigkeit", "")),
+            "sprengel": sprengel,
             "wuensche": wuensche,
             "trennen_von": trennen_von,
         })
@@ -295,12 +300,14 @@ def _klassen_daten_aus_einteilung(df: pd.DataFrame, einteilung: list) -> list[di
         schueler_liste = []
         for sid, row in klassen_df.iterrows():
             auff_raw = pd.to_numeric(row.get("Auffaelligkeit_Score", 0), errors="coerce")
+            sprengel_wert = row.get("Sprengel", "")
             schueler_liste.append({
                 "id": int(sid),
                 "vorname": str(row.get("Vorname", "")),
                 "name": str(row.get("Name", "")),
                 "geschlecht": str(row.get("Geschlecht", "")),
                 "auffaelligkeit": 0.0 if pd.isna(auff_raw) else float(auff_raw),
+                "sprengel": str(sprengel_wert).strip() if pd.notna(sprengel_wert) else "",
             })
         klassen_daten.append({
             "name": _get_class_name(i),
@@ -546,7 +553,7 @@ def starte_optimierung(
     gesamtstatistiken = berechne_gesamtstatistiken(df_algo, anzahl_klassen)
 
     start_einteilung = erstelle_zufaellige_einteilung(df_algo.index, anzahl_klassen)
-    finale_einteilung, finaler_score = optimiere_einteilung(
+    finale_einteilung, finaler_score = optimiere_mit_sprengel(
         start_einteilung, df_algo, gesamtstatistiken, anzahl_klassen,
         iterationen=iterationen,
         start_temp=start_temp,
@@ -715,6 +722,8 @@ def exportiere_excel():
                 "Wünsche": kp.wunsch_ampel,
                 "Trennungen miss.": kp.trennungen_missachtet,
                 "Trennungen": kp.trennungen_ampel,
+                "Ohne Laufpartner": kp.ohne_laufpartner,
+                "Laufpartner": kp.laufpartner_ampel,
             })
         pd.DataFrame(pruef_daten).to_excel(writer, sheet_name="Pruefung", index=False)
 

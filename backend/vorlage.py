@@ -88,6 +88,20 @@ VORLAGE_SPALTEN = [
         "validierung": ERLAUBTE_MIGRATION,
         "validierung_fehler": "Bitte nur 'Ja' oder 'Nein' eingeben.",
     },
+    {
+        "name": "Sprengel",
+        "breite": 18,
+        "kommentar": (
+            "Schulsprengel / Wohngebiet des Kindes.\n"
+            "Wird für die Laufpartner-Zuordnung\n"
+            "verwendet: Jedes Kind soll mindestens\n"
+            "ein anderes Kind aus dem gleichen\n"
+            "Sprengel in seiner Klasse haben.\n"
+            "\n"
+            "Freitext (z.B. Nord, Süd, Mitte)."
+        ),
+        "beispiele": ["Nord", "Süd"],
+    },
 ]
 
 ANLEITUNGSTEXTE = [
@@ -114,6 +128,13 @@ ANLEITUNGSTEXTE = [
     "  Migrationshintergrund / 2. Staatsangehörigkeit:",
     "     Ja",
     "     Nein",
+    "",
+    "  Sprengel:",
+    "     Schulsprengel / Wohngebiet des Kindes (Freitext).",
+    "     Wird für die Laufpartner-Zuordnung verwendet:",
+    "     Jedes Kind soll mind. ein anderes Kind aus dem gleichen",
+    "     Sprengel in seiner Klasse haben (Schulweg-Partner).",
+    "     (optional – kann leer gelassen werden)",
     "",
     "Hinweise:",
     "  - Schüler-IDs werden automatisch vergeben.",

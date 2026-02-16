@@ -292,12 +292,15 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
             ${migOptionen}
         </select>`;
 
+        const sprengelWert = s.sprengel || "";
+
         tr.innerHTML = `
             <td class="col-nr">${s.id}</td>
             <td class="col-name">${s.vorname} ${s.name}</td>
             <td class="col-geschlecht">${geschlechtSelect}</td>
             <td class="col-auff">${auffSelect}</td>
             <td class="col-migration">${migSelect}</td>
+            <td class="col-sprengel">${sprengelWert ? `<span class="sprengel-tag">${sprengelWert}</span>` : '<span class="text-muted">–</span>'}</td>
             <td class="col-wuensche">
                 <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche" data-max="4"></div>
             </td>
@@ -311,7 +314,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
         if (hatHinweise) {
             const hinweisTr = document.createElement("tr");
             hinweisTr.className = "validierung-hinweis-row";
-            hinweisTr.innerHTML = `<td colspan="7">${hinweiseMap[s.id].map(h =>
+            hinweisTr.innerHTML = `<td colspan="8">${hinweiseMap[s.id].map(h =>
                 `<div class="validierung-hinweis-item">⚠ <strong>${h.spalte}</strong>: ${h.hinweis}</div>`
             ).join("")}</td>`;
             schuelerEditBody.appendChild(hinweisTr);
@@ -662,7 +665,7 @@ function renderAmpel(pruefung) {
 
 function renderSummary(pruefung) {
     const z = pruefung.zusammenfassung;
-    summaryCards.innerHTML = `
+    let html = `
         <div class="summary-card">
             <div class="value">${z.anzahl_schueler}</div>
             <div class="label">Schüler gesamt</div>
@@ -684,40 +687,66 @@ function renderSummary(pruefung) {
             <div class="label">Trennungen missachtet</div>
         </div>
     `;
+
+    if (z.hat_sprengel) {
+        const lpFarbe = z.ohne_laufpartner_gesamt === 0 ? "gruen"
+            : z.ohne_laufpartner_gesamt <= 2 * z.anzahl_klassen ? "orange" : "rot";
+        html += `
+            <div class="summary-card">
+                <div class="value" style="color: var(--${lpFarbe})">${z.ohne_laufpartner_gesamt}</div>
+                <div class="label">Ohne Laufpartner</div>
+            </div>
+        `;
+    }
+
+    summaryCards.innerHTML = html;
 }
 
 function renderPruefungTabelle(pruefung) {
     const thead = pruefungTable.querySelector("thead");
     const tbody = pruefungTable.querySelector("tbody");
+    const hatSprengel = pruefung.zusammenfassung.hat_sprengel;
 
-    thead.innerHTML = `<tr>
+    let headerHtml = `<tr>
         <th>Klasse</th>
         <th>Sch.</th>
         <th>M</th><th>W</th><th>Δ</th><th></th>
         <th>Auff. Σ</th><th>Auff. Ø</th><th></th>
         <th>Migr. %</th><th>Δ pp</th><th></th>
         <th>Wunsch %</th><th></th>
-        <th>Trenn.</th><th></th>
-    </tr>`;
+        <th>Trenn.</th><th></th>`;
+    if (hatSprengel) headerHtml += `<th title="Kinder ohne Laufpartner (gleicher Sprengel)">Ohne LP</th><th></th>`;
+    headerHtml += `</tr>`;
+    thead.innerHTML = headerHtml;
 
-    tbody.innerHTML = pruefung.klassen.map(kp => `<tr>
-        <td><strong>Klasse ${kp.klasse_name}</strong></td>
-        <td>${kp.anzahl_schueler}</td>
-        <td>${kp.maennlich}</td>
-        <td>${kp.weiblich}</td>
-        <td>${kp.geschlecht_differenz}</td>
-        <td><span class="ampel-cell ${kp.geschlecht_ampel}"></span></td>
-        <td>${kp.auffaelligkeit_summe}</td>
-        <td>${kp.auffaelligkeit_durchschnitt}</td>
-        <td><span class="ampel-cell ${kp.auffaelligkeit_ampel}"></span></td>
-        <td>${kp.migration_anteil_pct}%</td>
-        <td>${kp.migration_abweichung_pp}</td>
-        <td><span class="ampel-cell ${kp.migration_ampel}"></span></td>
-        <td>${kp.wunsch_quote_pct}%</td>
-        <td><span class="ampel-cell ${kp.wunsch_ampel}"></span></td>
-        <td>${kp.trennungen_missachtet}</td>
-        <td><span class="ampel-cell ${kp.trennungen_ampel}"></span></td>
-    </tr>`).join("");
+    tbody.innerHTML = pruefung.klassen.map(kp => {
+        let rowHtml = `<tr>
+            <td><strong>Klasse ${kp.klasse_name}</strong></td>
+            <td>${kp.anzahl_schueler}</td>
+            <td>${kp.maennlich}</td>
+            <td>${kp.weiblich}</td>
+            <td>${kp.geschlecht_differenz}</td>
+            <td><span class="ampel-cell ${kp.geschlecht_ampel}"></span></td>
+            <td>${kp.auffaelligkeit_summe}</td>
+            <td>${kp.auffaelligkeit_durchschnitt}</td>
+            <td><span class="ampel-cell ${kp.auffaelligkeit_ampel}"></span></td>
+            <td>${kp.migration_anteil_pct}%</td>
+            <td>${kp.migration_abweichung_pp}</td>
+            <td><span class="ampel-cell ${kp.migration_ampel}"></span></td>
+            <td>${kp.wunsch_quote_pct}%</td>
+            <td><span class="ampel-cell ${kp.wunsch_ampel}"></span></td>
+            <td>${kp.trennungen_missachtet}</td>
+            <td><span class="ampel-cell ${kp.trennungen_ampel}"></span></td>`;
+        if (hatSprengel) {
+            const lpTitle = kp.ohne_laufpartner_details && kp.ohne_laufpartner_details.length > 0
+                ? kp.ohne_laufpartner_details.map(d => `${d.schueler_name} (${d.sprengel})`).join("\n")
+                : "";
+            rowHtml += `<td title="${lpTitle}">${kp.ohne_laufpartner}</td>`;
+            rowHtml += `<td><span class="ampel-cell ${kp.laufpartner_ampel}"></span></td>`;
+        }
+        rowHtml += `</tr>`;
+        return rowHtml;
+    }).join("");
 }
 
 function renderWuensche(pruefung) {
@@ -764,10 +793,15 @@ function schuelerRowHtml(s) {
     if (s.auffaelligkeit >= 5) auffTag += " sehr-hoch";
     else if (s.auffaelligkeit >= 3) auffTag += " hoch";
 
+    const sprengelHtml = s.sprengel
+        ? `<span class="sprengel-badge" title="Sprengel: ${s.sprengel}">${s.sprengel}</span>`
+        : "";
+
     return `
         <div class="schueler-row" draggable="true" data-schueler-id="${s.id}">
             <span class="geschlecht-badge ${s.geschlecht}">${s.geschlecht.toUpperCase()}</span>
             <span class="schueler-name">${s.vorname} ${s.name}</span>
+            ${sprengelHtml}
             <span class="${auffTag}">${s.auffaelligkeit}</span>
         </div>
     `;

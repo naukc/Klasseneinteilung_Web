@@ -98,6 +98,12 @@ OPTIONALE_SPALTEN: dict[str, dict] = {
             "id", "nr", "nummer", "schülernummer", "schuelernummer",
         ],
     },
+    "Sprengel": {
+        "aliasse": [
+            "sprengel", "schulsprengel", "schulbezirk", "bezirk",
+            "wohngebiet", "einzugsgebiet", "stadtteil",
+        ],
+    },
 }
 
 

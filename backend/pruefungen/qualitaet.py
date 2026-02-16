@@ -9,7 +9,10 @@ Prüft für jede Klasse, wie gut die Einteilung die pädagogischen Ziele erfüll
 - Freundschaftswünsche (Erfüllungsquote)
 - Trennungsauflagen (keine Verstöße)
 - Klassengröße (ausgeglichen)
+- Laufpartner / Sprengel (jedes Kind soll mind. einen Schulweg-Partner haben)
 """
+
+from collections import Counter
 
 import pandas as pd
 import numpy as np
@@ -27,6 +30,7 @@ SCHWELLEN = {
     "wunsch_quote_pct": {"gruen": 75, "orange": 50},           # % erfüllte Wünsche
     "trennungen_missachtet": {"gruen": 0, "orange": 0},        # 0 = muss perfekt sein
     "klassengroesse_abweichung": {"gruen": 1, "orange": 2},    # max Differenz zum Ideal
+    "ohne_laufpartner": {"gruen": 0, "orange": 2},             # Kinder ohne Sprengel-Partner
 }
 
 
@@ -88,6 +92,12 @@ class KlassenPruefung:
     trennungen_gesamt: int = 0
     trennungen_missachtet: int = 0
     trennungen_ampel: str = "gruen"
+
+    # Laufpartner (Sprengel)
+    ohne_laufpartner: int = 0
+    ohne_laufpartner_details: list = field(default_factory=list)
+    laufpartner_ampel: str = "gruen"
+    hat_sprengel: bool = False
 
     # Nicht erfüllte Wünsche im Detail
     nicht_erfuellte_wuensche: list = field(default_factory=list)
@@ -266,6 +276,35 @@ def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
         kp.trennungen_ampel = _ampel(kp.trennungen_missachtet, s["gruen"], s["orange"])
         alle_ampeln.append(kp.trennungen_ampel)
 
+        # --- 7. Laufpartner / Sprengel ---
+        if "Sprengel" in df.columns:
+            sprengel_werte = (
+                klassen_df["Sprengel"]
+                .dropna()
+                .astype(str)
+                .str.strip()
+            )
+            sprengel_werte = sprengel_werte[sprengel_werte != ""]
+
+            if not sprengel_werte.empty:
+                kp.hat_sprengel = True
+                zaehler = Counter(sprengel_werte)
+
+                for schueler_id, sprengel_val in sprengel_werte.items():
+                    if zaehler[sprengel_val] < 2:
+                        vorname = str(df.at[schueler_id, "Vorname"])
+                        nachname = str(df.at[schueler_id, "Name"])
+                        kp.ohne_laufpartner += 1
+                        kp.ohne_laufpartner_details.append({
+                            "schueler_id": int(schueler_id),
+                            "schueler_name": f"{vorname} {nachname}",
+                            "sprengel": sprengel_val,
+                        })
+
+                s = SCHWELLEN["ohne_laufpartner"]
+                kp.laufpartner_ampel = _ampel(kp.ohne_laufpartner, s["gruen"], s["orange"])
+                alle_ampeln.append(kp.laufpartner_ampel)
+
         klassen_pruefungen.append(kp)
 
     # --- Gesamt-Ampel ---
@@ -300,6 +339,8 @@ def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
         "wuensche_erfuellt": gesamt_erfuellt,
         "wuensche_quote_pct": round(gesamt_erfuellt / gesamt_wuensche * 100, 1) if gesamt_wuensche > 0 else 100.0,
         "trennungen_missachtet_gesamt": sum(kp.trennungen_missachtet for kp in klassen_pruefungen),
+        "ohne_laufpartner_gesamt": sum(kp.ohne_laufpartner for kp in klassen_pruefungen),
+        "hat_sprengel": any(kp.hat_sprengel for kp in klassen_pruefungen),
     }
 
     return GesamtPruefung(

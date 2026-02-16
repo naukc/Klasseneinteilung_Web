@@ -56,6 +56,11 @@
 
     /* Drag */
     --drag-bg: #dbeafe;
+
+    /* Sprengel */
+    --sprengel-bg: #e0e7ff;
+    --sprengel-text: #3730a3;
+    --sprengel-border: #c7d2fe;
 }
 
 [data-theme="dark"] {
@@ -102,6 +107,10 @@
     --auff-sehr-hoch-text: #fca5a5;
 
     --drag-bg: #1e3a5f;
+
+    --sprengel-bg: #1e1b4b;
+    --sprengel-text: #a5b4fc;
+    --sprengel-border: #3730a3;
 }
 
 body {
@@ -671,6 +680,12 @@ tr.validierung-fehler td {
     min-width: 80px;
     flex: 1;
     background: transparent;
+    color: var(--text);
+}
+
+.ac-input::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
 }
 
 .ac-chips {
@@ -1218,4 +1233,43 @@ tr.validierung-fehler td {
 
 .theme-switch input:focus-visible + .theme-slider {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+
+/* ==========================================================
+   Sprengel / Laufpartner
+   ========================================================== */
+
+.sprengel-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--sprengel-bg);
+    color: var(--sprengel-text);
+    border: 1px solid var(--sprengel-border);
+    border-radius: 4px;
+}
+
+.sprengel-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    background: var(--sprengel-bg);
+    color: var(--sprengel-text);
+    border: 1px solid var(--sprengel-border);
+    border-radius: 3px;
+    margin-left: 4px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.col-sprengel {
+    min-width: 80px;
+    text-align: center;
+}
+
+.text-muted {
+    color: var(--text-muted);
 }

@@ -22,6 +22,9 @@ jobs:
           - os: windows-latest
             artifact_name: Klasseneinteilung-Windows
             asset_name: Klasseneinteilung-Windows.zip
+          - os: macos-latest
+            artifact_name: Klasseneinteilung-macOS
+            asset_name: Klasseneinteilung-macOS.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -56,6 +59,13 @@ jobs:
           cd dist
           Compress-Archive -Path Klasseneinteilung -DestinationPath ..\${{ matrix.asset_name }}
 
+      # macOS: zip erstellen
+      - name: Archiv erstellen (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -r ../${{ matrix.asset_name }} Klasseneinteilung/
+
       # Artifact hochladen (für jeden Build verfügbar)
       - name: Artifact hochladen
         uses: actions/upload-artifact@v4
@@ -85,15 +95,19 @@ jobs:
             | Betriebssystem | Download |
             |---|---|
             | Windows | `Klasseneinteilung-Windows.zip` |
+            | macOS | `Klasseneinteilung-macOS.zip` |
             | Linux | `Klasseneinteilung-Linux.tar.gz` |
 
             ### Installation
 
             **Windows:** ZIP entpacken → `Klasseneinteilung.exe` starten.
 
+            **macOS:** ZIP entpacken → `Klasseneinteilung` ausführen (ggf. Rechtsklick → Öffnen bei Warnung).
+
             **Linux:** Archiv entpacken → `./Klasseneinteilung` ausführen.
           files: |
             Klasseneinteilung-Windows.zip
+            Klasseneinteilung-macOS.zip
             Klasseneinteilung-Linux.tar.gz
           draft: false
           prerelease: false

@@ -15,7 +15,7 @@ const API = "/api";
 // ==========================================================
 
 setInterval(() => {
-    fetch(`${API}/heartbeat`, { method: "POST" }).catch(() => {});
+    fetch(`${API}/heartbeat`, { method: "POST" }).catch(() => { });
 }, 3000);
 
 // ==========================================================
@@ -64,6 +64,13 @@ const anzahlKlassen = document.getElementById("anzahlKlassen");
 const iterationen = document.getElementById("iterationen");
 const startBtn = document.getElementById("startBtn");
 const exportBtn = document.getElementById("exportBtn");
+const saveAssignmentBtn = document.getElementById("saveAssignmentBtn");
+const savedAssignmentsSection = document.getElementById("savedAssignmentsSection");
+const savedAssignmentsBody = document.getElementById("savedAssignmentsBody");
+const saveModal = document.getElementById("saveModal");
+const assignmentNameInput = document.getElementById("assignmentName");
+const cancelSaveBtn = document.getElementById("cancelSaveBtn");
+const confirmSaveBtn = document.getElementById("confirmSaveBtn");
 const progressContainer = document.getElementById("progressContainer");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
@@ -111,6 +118,7 @@ fileInput.addEventListener("change", async () => {
     klassenSection.classList.add("hidden");
     startBtn.disabled = true;
     exportBtn.disabled = true;
+    saveAssignmentBtn.disabled = true;
 
     try {
         const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
@@ -174,8 +182,8 @@ function zeigeMapping(mapping, alleSpalten) {
                 <select data-ziel="${zielName}">
                     <option value="">— nicht zugeordnet —</option>
                     ${alleSpalten.map(s =>
-                        `<option value="${s}" ${s === info.spalte ? "selected" : ""}>${s}</option>`
-                    ).join("")}
+            `<option value="${s}" ${s === info.spalte ? "selected" : ""}>${s}</option>`
+        ).join("")}
                 </select>
             </div>
         `;
@@ -553,6 +561,9 @@ confirmDataBtn.addEventListener("click", async () => {
         // Start-Button aktivieren (auch mit Warnungen – die sind nur Hinweise)
         startBtn.disabled = false;
 
+        // Neu: Speichern-Button auch aktivieren, da wir nun vor Optimierung speichern können
+        saveAssignmentBtn.disabled = false;
+
         // Visuelles Feedback
         confirmDataBtn.innerHTML = `<span class="icon">✓</span> Gespeichert!`;
         confirmDataBtn.classList.remove("btn-success");
@@ -580,6 +591,7 @@ confirmDataBtn.addEventListener("click", async () => {
 startBtn.addEventListener("click", async () => {
     startBtn.disabled = true;
     exportBtn.disabled = true;
+    saveAssignmentBtn.disabled = true;
     dashboard.classList.add("hidden");
     ampelBanner.classList.add("hidden");
     klassenSection.classList.add("hidden");
@@ -687,6 +699,7 @@ function renderAlles(data) {
     dashboard.classList.remove("hidden");
     klassenSection.classList.remove("hidden");
     exportBtn.disabled = false;
+    saveAssignmentBtn.disabled = false;
 }
 
 function renderAmpel(pruefung) {
@@ -1062,3 +1075,158 @@ function entferneTrennungsInfo() {
     const existing = document.getElementById("trennungInfo");
     if (existing) existing.remove();
 }
+
+
+// ==========================================================
+// Persistenz (Laden, Speichern, Löschen)
+// ==========================================================
+
+async function loadAssignments() {
+    try {
+        const res = await fetch(`${API}/assignments`);
+        if (!res.ok) throw new Error("Fehler beim Laden der Einteilungen");
+
+        const data = await res.json();
+
+        if (data.assignments && data.assignments.length > 0) {
+            savedAssignmentsSection.classList.remove("hidden");
+            savedAssignmentsBody.innerHTML = data.assignments.map(a => {
+                const date = new Date(a.timestamp * 1000);
+                const dateString = date.toLocaleDateString("de-DE") + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                return `
+                    <tr>
+                        <td><strong>${a.name}</strong></td>
+                        <td>${dateString}</td>
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn btn-primary" onclick="loadSingleAssignment('${a.id}')" style="padding: 4px 8px; font-size: 0.8rem;">Laden</button>
+                                <button class="btn btn-secondary" onclick="deleteAssignment('${a.id}')" style="padding: 4px 8px; font-size: 0.8rem;">Löschen</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        } else {
+            savedAssignmentsSection.classList.add("hidden");
+        }
+    } catch (err) {
+        console.error("Fehler beim Laden der Einteilungen:", err);
+    }
+}
+
+// Global verfügbar machen für inline onclick
+window.loadSingleAssignment = async function (id) {
+    try {
+        startBtn.disabled = true;
+        exportBtn.disabled = true;
+        saveAssignmentBtn.disabled = true;
+        dashboard.classList.add("hidden");
+        ampelBanner.classList.add("hidden");
+        klassenSection.classList.add("hidden");
+
+        const res = await fetch(`${API}/assignments/${id}`);
+        if (!res.ok) throw new Error("Fehler beim Laden der Einteilung");
+
+        const data = await res.json();
+        currentData = data;
+
+        if (data.hat_einteilung) {
+            renderAlles(data);
+
+            // Verstecke Upload-Feedback
+            uploadInfo.classList.add("hidden");
+            document.getElementById("mappingSection").classList.add("hidden");
+            document.getElementById("schuelerEditSection").classList.add("hidden");
+
+            window.scrollTo({ top: dashboard.offsetTop - 50, behavior: 'smooth' });
+        } else {
+            // Nur Schülerdaten geladen - zeige den Editor und reaktiviere Start-Button
+            schuelerListe = data.schueler || [];
+            zeigeSchuelerEditor(schuelerListe, []);
+
+            uploadInfo.classList.add("hidden");
+            document.getElementById("mappingSection").classList.add("hidden");
+            document.getElementById("schuelerEditSection").classList.remove("hidden");
+
+            startBtn.disabled = false;
+            saveAssignmentBtn.disabled = false;
+
+            window.scrollTo({ top: document.getElementById("schuelerEditSection").offsetTop - 50, behavior: 'smooth' });
+        }
+
+    } catch (err) {
+        alert("Einteilung konnte nicht geladen werden.");
+        console.error(err);
+    }
+};
+
+window.deleteAssignment = async function (id) {
+    if (!confirm("Möchten Sie diese Einteilung wirklich löschen?")) return;
+    try {
+        const res = await fetch(`${API}/assignments/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Fehler beim Löschen");
+        loadAssignments();
+    } catch (err) {
+        alert(err.message);
+    }
+};
+
+if (saveAssignmentBtn) {
+    saveAssignmentBtn.addEventListener("click", () => {
+        saveModal.classList.remove("hidden");
+        assignmentNameInput.value = "";
+        setTimeout(() => assignmentNameInput.focus(), 50);
+    });
+}
+
+if (cancelSaveBtn) {
+    cancelSaveBtn.addEventListener("click", () => {
+        saveModal.classList.add("hidden");
+    });
+}
+
+if (confirmSaveBtn) {
+    confirmSaveBtn.addEventListener("click", async () => {
+        const name = assignmentNameInput.value.trim();
+        if (!name) {
+            alert("Bitte einen Namen für die Einteilung eingeben.");
+            return;
+        }
+
+        try {
+            confirmSaveBtn.disabled = true;
+            confirmSaveBtn.textContent = "Speichere...";
+
+            const res = await fetch(`${API}/assignments`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name })
+            });
+
+            if (!res.ok) throw new Error("Speichern fehlgeschlagen");
+
+            saveModal.classList.add("hidden");
+            loadAssignments();
+
+            // UI Feedback
+            const originalText = saveAssignmentBtn.innerHTML;
+            saveAssignmentBtn.innerHTML = `<span class="icon">✓</span> Gespeichert`;
+            saveAssignmentBtn.classList.remove("btn-info");
+            saveAssignmentBtn.classList.add("btn-success");
+            setTimeout(() => {
+                saveAssignmentBtn.innerHTML = originalText;
+                saveAssignmentBtn.classList.remove("btn-success");
+                saveAssignmentBtn.classList.add("btn-info");
+            }, 2000);
+
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.textContent = "Speichern";
+        }
+    });
+}
+
+// Lade Einteilungen beim Start
+document.addEventListener("DOMContentLoaded", loadAssignments);

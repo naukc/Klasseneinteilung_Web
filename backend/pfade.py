@@ -56,3 +56,21 @@ def get_upload_dir() -> Path:
     upload_dir = get_data_path() / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     return upload_dir
+
+
+def get_save_dir() -> Path:
+    """
+    Pfad für dauerhaft gespeicherte Einteilungen (JSON).
+    OS-spezifisches AppData-Verzeichnis.
+    """
+    if sys.platform == "win32":
+        import os
+        base = Path(os.environ.get("APPDATA", "~")).expanduser()
+    elif sys.platform == "darwin":
+        base = Path("~/Library/Application Support").expanduser()
+    else:
+        base = Path("~/.local/share").expanduser()
+        
+    save_dir = base / "Klasseneinteilung" / "saved_assignments"
+    save_dir.mkdir(parents=True, exist_ok=True)
+    return save_dir

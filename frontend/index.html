@@ -49,6 +49,10 @@
                 <button class="btn btn-secondary" id="exportBtn" disabled>
                     <span class="icon">💾</span> Excel-Export
                 </button>
+
+                <button class="btn btn-info" id="saveAssignmentBtn" disabled>
+                    <span class="icon">📌</span> Speichern
+                </button>
             </div>
 
             <!-- Vorlage herunterladen -->
@@ -61,6 +65,23 @@
             </div>
 
             <div id="uploadInfo" class="upload-info hidden"></div>
+        </section>
+
+        <!-- Gespeicherte Einteilungen -->
+        <section class="saved-assignments card hidden" id="savedAssignmentsSection">
+            <h2>Gespeicherte Einteilungen</h2>
+            <div class="table-wrapper">
+                <table class="assignments-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Erstellt am</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="savedAssignmentsBody"></tbody>
+                </table>
+            </div>
         </section>
 
         <!-- Spalten-Mapping -->
@@ -160,6 +181,21 @@
             <h2>Klassenlisten <span class="hint">(Drag & Drop zum Verschieben)</span></h2>
             <div class="klassen-grid" id="klassenGrid"></div>
         </section>
+    </div>
+
+    <!-- Save Modal -->
+    <div class="modal hidden" id="saveModal">
+        <div class="modal-content card">
+            <h3>Einteilung speichern</h3>
+            <div class="config-group">
+                <label for="assignmentName">Name der Einteilung:</label>
+                <input type="text" id="assignmentName" placeholder="z.B. Klausur Mathe">
+            </div>
+            <div class="modal-actions" style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="cancelSaveBtn">Abbrechen</button>
+                <button class="btn btn-success" id="confirmSaveBtn">Speichern</button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

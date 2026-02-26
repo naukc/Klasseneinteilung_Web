@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 import pandas as pd
 
-from backend.pfade import get_lib_path, get_upload_dir
+from backend.pfade import get_lib_path, get_upload_dir, get_save_dir
 
 # Submodul-Pfad einbinden
 LIB_PATH = str(get_lib_path())
@@ -810,3 +810,126 @@ def heartbeat():
     global letzter_heartbeat
     letzter_heartbeat = time.time()
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Persistenz (Einteilungen speichern/laden)
+# ---------------------------------------------------------------------------
+
+class AssignmentSaveRequest(BaseModel):
+    name: str
+
+@router.post("/assignments")
+def save_assignment(body: AssignmentSaveRequest):
+    """Speichert die aktuellen Daten (mit oder ohne Einteilung)."""
+    if _state["df"] is None:
+        raise HTTPException(status_code=400, detail="Keine Daten vorhanden zum Speichern.")
+        
+    save_dir = get_save_dir()
+    timestamp = int(time.time())
+    file_id = f"{timestamp}_{body.name.replace(' ', '_')}"
+    # Bereinigung des Dateinamens
+    file_id = "".join(c for c in file_id if c.isalnum() or c in ("-", "_"))
+    
+    file_path = save_dir / f"{file_id}.json"
+    
+    data = {
+        "id": file_id,
+        "name": body.name,
+        "timestamp": timestamp,
+        "einteilung": _state["einteilung"],
+        "df_json": _state["df"].to_dict(orient="split")
+    }
+    
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        
+    return {"status": "ok", "id": file_id}
+
+@router.get("/assignments")
+def list_assignments():
+    """Gibt eine Liste aller gespeicherten Einteilungen zurück."""
+    save_dir = get_save_dir()
+    assignments = []
+    
+    if save_dir.exists():
+        for file in save_dir.glob("*.json"):
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    assignments.append({
+                        "id": data.get("id", file.stem),
+                        "name": data.get("name", "Unbenannt"),
+                        "timestamp": data.get("timestamp", 0)
+                    })
+            except Exception:
+                continue
+                
+    # Nach Datum absteigend sortieren
+    assignments.sort(key=lambda x: x["timestamp"], reverse=True)
+    return {"status": "ok", "assignments": assignments}
+
+@router.get("/assignments/{assignment_id}")
+def load_assignment(assignment_id: str):
+    """Lädt eine gespeicherte Einteilung in den State."""
+    save_dir = get_save_dir()
+    
+    # Simple Path Traversal Prevention
+    if ".." in assignment_id or "/" in assignment_id or "\\" in assignment_id:
+        raise HTTPException(status_code=400, detail="Ungültige ID")
+        
+    file_path = save_dir / f"{assignment_id}.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Einteilung nicht gefunden.")
+        
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        # DataFrame exakt wiederherstellen
+        df_json = data["df_json"]
+        df = pd.DataFrame(data=df_json["data"], index=df_json["index"], columns=df_json["columns"])
+        
+        _state["df"] = df
+        _state["einteilung"] = data.get("einteilung")
+        
+        if _state["einteilung"]:
+            _state["pruefung"] = pruefe_einteilung(_state["einteilung"], df)
+            klassen = _klassen_daten_aus_einteilung(df, _state["einteilung"])
+            pruefung_dict = asdict(_state["pruefung"])
+        else:
+            _state["pruefung"] = None
+            klassen = []
+            pruefung_dict = None
+            
+        _state["upload_path"] = None 
+        
+        return {
+            "status": "ok",
+            "anzahl_schueler": len(df),
+            "klassen": klassen,
+            "pruefung": pruefung_dict,
+            "hat_einteilung": _state["einteilung"] is not None,
+            "schueler": _schueler_liste_aus_df(df) if not _state["einteilung"] else []
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Laden: {str(e)}")
+
+@router.delete("/assignments/{assignment_id}")
+def delete_assignment(assignment_id: str):
+    """Löscht eine gespeicherte Einteilung."""
+    save_dir = get_save_dir()
+    
+    if ".." in assignment_id or "/" in assignment_id or "\\" in assignment_id:
+        raise HTTPException(status_code=400, detail="Ungültige ID")
+        
+    file_path = save_dir / f"{assignment_id}.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Einteilung nicht gefunden.")
+        
+    try:
+        file_path.unlink()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Löschen: {str(e)}")

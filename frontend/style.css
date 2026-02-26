@@ -1273,3 +1273,75 @@ tr.validierung-fehler td {
 .text-muted {
     color: var(--text-muted);
 }
+
+/* ===================================================================
+   Modals & Gespeicherte Einteilungen
+   =================================================================== */
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--overlay-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-content h3 {
+    margin-bottom: 16px;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text);
+    margin-top: 8px;
+}
+
+/* Modal Actions and Buttons */
+.modal-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.btn-info {
+    background: #0ea5e9;
+    color: white;
+}
+.btn-info:hover:not(:disabled) { background: #0284c7; }
+
+/* Gespeicherte Einteilungen Tabelle */
+.assignments-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.assignments-table th, .assignments-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.assignments-table tbody tr:hover td {
+    background: var(--bg-hover);
+}
+

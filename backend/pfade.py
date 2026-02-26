@@ -27,15 +27,17 @@ def get_base_path() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+import tempfile
+
 def get_data_path() -> Path:
     """
     Pfad für veränderbare Daten (Uploads, temporäre Dateien).
 
     - Entwicklung: Projekt-Root / backend
-    - Gepackt: Verzeichnis neben der ausführbaren Datei
+    - Gepackt: Temporäres Verzeichnis (OS-spezifisch)
     """
     if ist_gepackt():
-        return Path(sys.executable).parent
+        return Path(tempfile.gettempdir()) / "KlasseneinteilungApp"
     return Path(__file__).resolve().parent
 
 
@@ -52,5 +54,5 @@ def get_lib_path() -> Path:
 def get_upload_dir() -> Path:
     """Pfad zum Upload-Verzeichnis (schreibbar)."""
     upload_dir = get_data_path() / "uploads"
-    upload_dir.mkdir(exist_ok=True)
+    upload_dir.mkdir(parents=True, exist_ok=True)
     return upload_dir

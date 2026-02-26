@@ -39,4 +39,23 @@ echo ""
 echo "=== Build erfolgreich! ==="
 echo "Output: dist/Klasseneinteilung/"
 echo ""
-echo "Starten mit: ./dist/Klasseneinteilung/Klasseneinteilung"
+
+if [ "$(uname)" = "Darwin" ]; then
+    echo "⚙️  Fixe macOS-Sicherheitseinstellungen (Quarantine & Ad-hoc Signature)..."
+    
+    # Entferne Quarantine Flag von allen Dateien, damit nicht bei jedem dylib eine Warnung kommt
+    xattr -cr dist/Klasseneinteilung 2>/dev/null || true
+    xattr -cr dist/Klasseneinteilung.app 2>/dev/null || true
+    
+    # Ad-hoc signieren (mit force und deep) verhindert Gatekeeper-Popups für Bibliotheken
+    codesign --force --deep -s - dist/Klasseneinteilung 2>/dev/null || true
+    if [ -d "dist/Klasseneinteilung.app" ]; then
+        codesign --force --deep -s - dist/Klasseneinteilung.app 2>/dev/null || true
+    fi
+    echo "✅ macOS Fixes angewendet!"
+    echo ""
+    echo "Starten mit: open dist/Klasseneinteilung.app"
+else
+    echo "Starten mit: ./dist/Klasseneinteilung/Klasseneinteilung"
+fi
+

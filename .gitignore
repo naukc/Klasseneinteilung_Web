@@ -9,6 +9,13 @@ build/
 venv/
 env/
 
+# Locale Builds / Binaries
+*.app/
+*.pkg
+*.zip
+*.tar.gz
+Klasseneinteilung-*/
+
 # Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep

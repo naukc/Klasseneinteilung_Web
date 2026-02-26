@@ -63,8 +63,9 @@ jobs:
       - name: Archiv erstellen (macOS)
         if: runner.os == 'macOS'
         run: |
+          codesign --force --deep -s - dist/Klasseneinteilung.app || true
           cd dist
-          zip -r ../${{ matrix.asset_name }} Klasseneinteilung/
+          zip -r ../${{ matrix.asset_name }} Klasseneinteilung.app/
 
       # Artifact hochladen (für jeden Build verfügbar)
       - name: Artifact hochladen

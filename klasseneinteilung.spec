@@ -118,3 +118,15 @@ coll = COLLECT(
     upx_exclude=[],
     name="Klasseneinteilung",
 )
+
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='Klasseneinteilung.app',
+        icon=None,
+        bundle_identifier='com.klasseneinteilung.app',
+        info_plist={
+            'NSHighResolutionCapable': 'True',
+            'LSBackgroundOnly': 'False',
+        },
+    )

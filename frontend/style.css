@@ -1345,3 +1345,46 @@ tr.validierung-fehler td {
     background: var(--bg-hover);
 }
 
+
+/* === Schulhund-Allergie === */
+.schulhund-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #666);
+    margin: 0.25rem 0 0.5rem;
+    flex-basis: 100%;
+}
+
+.klasse-schulhund {
+    border: 2px solid #f5b921;
+    box-shadow: 0 0 0 1px rgba(245, 185, 33, 0.2);
+}
+
+.klasse-schulhund .klasse-header small {
+    color: #b8860b;
+    font-weight: normal;
+    font-size: 0.75em;
+    margin-left: 0.25rem;
+}
+
+.schueler-allergie {
+    background-color: rgba(245, 185, 33, 0.10);
+}
+
+.schueler-allergie-unbekannt {
+    background-color: rgba(128, 128, 128, 0.12);
+}
+
+.allergie-icon {
+    font-size: 0.9em;
+    margin-left: 0.25rem;
+}
+
+.col-allergie {
+    width: 90px;
+}
+
+.edit-allergie {
+    width: 100%;
+    padding: 0.2rem;
+    font-size: 0.9rem;
+}

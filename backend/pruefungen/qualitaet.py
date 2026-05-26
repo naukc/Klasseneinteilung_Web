@@ -99,6 +99,12 @@ class KlassenPruefung:
     laufpartner_ampel: str = "gruen"
     hat_sprengel: bool = False
 
+    # Schulhund
+    ist_schulhund_klasse: bool = False
+    schulhund_allergiker: int = 0
+    schulhund_unbekannt: int = 0
+    schulhund_ampel: str = "n/a"
+
     # Nicht erfüllte Wünsche im Detail
     nicht_erfuellte_wuensche: list = field(default_factory=list)
 
@@ -109,6 +115,7 @@ class GesamtPruefung:
     klassen: list  # Liste von KlassenPruefung
     gesamt_ampel: str = "gruen"  # schlechteste Ampel über alle Kriterien
     zusammenfassung: dict = field(default_factory=dict)
+    schulhund_klasse_index: int | None = None
 
 
 def _get_class_name(index: int) -> str:
@@ -130,7 +137,11 @@ def _baue_schueler_klasse_map(einteilung: list) -> dict:
     return mapping
 
 
-def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
+def pruefe_einteilung(
+    einteilung: list,
+    df: pd.DataFrame,
+    schulhund_klasse: int | None = None,
+) -> GesamtPruefung:
     """
     Führt alle Qualitätsprüfungen für eine Einteilung durch.
 
@@ -305,6 +316,21 @@ def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
                 kp.laufpartner_ampel = _ampel(kp.ohne_laufpartner, s["gruen"], s["orange"])
                 alle_ampeln.append(kp.laufpartner_ampel)
 
+        # --- 8. Schulhund ---
+        from backend.schulhund import SPALTE as SCHULHUND_SPALTE, zaehle_allergiker_in_klasse
+        if schulhund_klasse is None or SCHULHUND_SPALTE not in df.columns:
+            kp.schulhund_ampel = "n/a"
+        else:
+            kp.ist_schulhund_klasse = (i == schulhund_klasse)
+            if kp.ist_schulhund_klasse:
+                allergiker, unbekannt = zaehle_allergiker_in_klasse(klasse_ids, df)
+                kp.schulhund_allergiker = allergiker
+                kp.schulhund_unbekannt = unbekannt
+                kp.schulhund_ampel = "gruen" if (allergiker == 0 and unbekannt == 0) else "rot"
+                alle_ampeln.append(kp.schulhund_ampel)
+            else:
+                kp.schulhund_ampel = "gruen"
+
         klassen_pruefungen.append(kp)
 
     # --- Gesamt-Ampel ---
@@ -347,4 +373,5 @@ def pruefe_einteilung(einteilung: list, df: pd.DataFrame) -> GesamtPruefung:
         klassen=klassen_pruefungen,
         gesamt_ampel=gesamt_ampel,
         zusammenfassung=zusammenfassung,
+        schulhund_klasse_index=schulhund_klasse,
     )

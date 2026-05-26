@@ -66,6 +66,36 @@ def _sprengel_bonus(einteilung: list, df: pd.DataFrame, punkte_pro_schueler: flo
 
 FORTSCHRITT_INTERVALL = 500
 
+STRAFE_SCHULHUND_VERLETZUNG = -100.0
+
+
+def _schulhund_strafe(
+    einteilung: list,
+    df: pd.DataFrame,
+    schulhund_klasse: int | None,
+    strafe_pro_kind: float,
+) -> float:
+    """
+    Strafpunkte für Allergiker/Unbekannte in der Schulhund-Klasse.
+    Returns: negativer Wert oder 0.0.
+    """
+    if schulhund_klasse is None:
+        return 0.0
+    from backend.schulhund import SPALTE, normalisiere_allergie_wert
+    if SPALTE not in df.columns:
+        return 0.0
+    if schulhund_klasse < 0 or schulhund_klasse >= len(einteilung):
+        return 0.0
+
+    strafe = 0.0
+    for sid in einteilung[schulhund_klasse]:
+        if sid not in df.index:
+            continue
+        wert = normalisiere_allergie_wert(df.at[sid, SPALTE])
+        if wert != "nein":  # 'ja' oder '' → Strafe
+            strafe += strafe_pro_kind
+    return strafe
+
 
 def optimiere_mit_sprengel(
     einteilung: list,
@@ -73,6 +103,7 @@ def optimiere_mit_sprengel(
     gesamt_stats: dict,
     anzahl_klassen: int,
     fortschritt_callback: Callable[[int, float, float], None] | None = None,
+    schulhund_klasse: int | None = None,
     **kwargs,
 ) -> tuple[list, float]:
     """
@@ -99,11 +130,13 @@ def optimiere_mit_sprengel(
     bester_score_tracker = [float("-inf")]
 
     def bewertung_mit_fortschritt(einteilung, df, gesamt_stats):
+        score = original_bewertung(einteilung, df, gesamt_stats)
         if hat_sprengel:
-            score = original_bewertung(einteilung, df, gesamt_stats)
             score += _sprengel_bonus(einteilung, df, PUNKTE_SPRENGEL_GLEICH)
-        else:
-            score = original_bewertung(einteilung, df, gesamt_stats)
+        if schulhund_klasse is not None:
+            score += _schulhund_strafe(
+                einteilung, df, schulhund_klasse, STRAFE_SCHULHUND_VERLETZUNG
+            )
 
         zaehler[0] += 1
         letzter_score[0] = score

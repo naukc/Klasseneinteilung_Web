@@ -42,6 +42,17 @@
                     <input type="number" id="iterationen" value="10000" min="1000" step="1000">
                 </div>
 
+                <div class="config-group">
+                    <label for="schulhundKlasse">Schulhund-Klasse:</label>
+                    <select id="schulhundKlasse">
+                        <option value="">— keine —</option>
+                    </select>
+                </div>
+
+                <p class="schulhund-hint">
+                    Die gewählte Klasse bleibt frei von Schülern mit Hundehaarallergie oder fehlender Angabe.
+                </p>
+
                 <button class="btn btn-success" id="startBtn" disabled>
                     <span class="icon">▶</span> Einteilung starten
                 </button>
@@ -115,6 +126,7 @@
                             <th class="col-auff">Auff.</th>
                             <th class="col-migration">Migration</th>
                             <th class="col-sprengel">Sprengel</th>
+                            <th class="col-allergie">Hund-Allergie</th>
                             <th class="col-wuensche">Wunschpartner (max. 4)</th>
                             <th class="col-trennung">Trennen von (max. 4)</th>
                         </tr>

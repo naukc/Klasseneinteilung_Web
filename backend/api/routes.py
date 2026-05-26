@@ -835,6 +835,9 @@ def exportiere_excel():
                 "Trennungen": kp.trennungen_ampel,
                 "Ohne Laufpartner": kp.ohne_laufpartner,
                 "Laufpartner": kp.laufpartner_ampel,
+                "Schulhund (Allergiker)": kp.schulhund_allergiker if kp.ist_schulhund_klasse else "",
+                "Schulhund (Unbekannt)": kp.schulhund_unbekannt if kp.ist_schulhund_klasse else "",
+                "Schulhund": kp.schulhund_ampel if kp.ist_schulhund_klasse else "",
             })
         pd.DataFrame(pruef_daten).to_excel(writer, sheet_name="Pruefung", index=False)
 

@@ -312,6 +312,8 @@ def _schueler_liste_aus_df(df: pd.DataFrame) -> list[dict]:
 
 def _klassen_daten_aus_einteilung(df: pd.DataFrame, einteilung: list) -> list[dict]:
     """Baut die Klassenlisten für die API-Antwort."""
+    from backend.schulhund import SPALTE as SCHULHUND_SPALTE, normalisiere_allergie_wert
+    hat_allergie_spalte = SCHULHUND_SPALTE in df.columns
     klassen_daten = []
     for i, klasse_ids in enumerate(einteilung):
         klassen_df = df.loc[klasse_ids]
@@ -319,6 +321,10 @@ def _klassen_daten_aus_einteilung(df: pd.DataFrame, einteilung: list) -> list[di
         for sid, row in klassen_df.iterrows():
             auff_raw = pd.to_numeric(row.get("Auffaelligkeit_Score", 0), errors="coerce")
             sprengel_wert = row.get("Sprengel", "")
+            hundehaarallergie = (
+                normalisiere_allergie_wert(row.get(SCHULHUND_SPALTE, ""))
+                if hat_allergie_spalte else ""
+            )
             schueler_liste.append({
                 "id": int(sid),
                 "vorname": str(row.get("Vorname", "")),
@@ -326,6 +332,7 @@ def _klassen_daten_aus_einteilung(df: pd.DataFrame, einteilung: list) -> list[di
                 "geschlecht": str(row.get("Geschlecht", "")),
                 "auffaelligkeit": 0.0 if pd.isna(auff_raw) else float(auff_raw),
                 "sprengel": str(sprengel_wert).strip() if pd.notna(sprengel_wert) else "",
+                "hundehaarallergie": hundehaarallergie,
             })
         klassen_daten.append({
             "name": _get_class_name(i),

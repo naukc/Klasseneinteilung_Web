@@ -94,6 +94,23 @@ const schuelerEditSection = document.getElementById("schuelerEditSection");
 const schuelerEditBody = document.getElementById("schuelerEditBody");
 const schuelerAnzahlBadge = document.getElementById("schuelerAnzahlBadge");
 const confirmDataBtn = document.getElementById("confirmDataBtn");
+const schulhundKlasse = document.getElementById("schulhundKlasse");
+
+function aktualisiereSchulhundDropdown() {
+    const anzahl = parseInt(anzahlKlassen.value, 10) || 0;
+    schulhundKlasse.innerHTML = '<option value="">— keine —</option>';
+    for (let i = 0; i < anzahl; i++) {
+        const buchstabe = String.fromCharCode(65 + i);
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = buchstabe;
+        schulhundKlasse.appendChild(opt);
+    }
+    schulhundKlasse.value = "";
+}
+
+anzahlKlassen.addEventListener("change", aktualisiereSchulhundDropdown);
+aktualisiereSchulhundDropdown();
 
 
 // ==========================================================
@@ -310,6 +327,13 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
 
         const sprengelWert = s.sprengel || "";
 
+        const allergieWert = s.hundehaarallergie || "";
+        const allergieSelect = `<select class="edit-select edit-allergie" data-schueler-id="${s.id}">
+            <option value="" ${allergieWert === "" ? "selected" : ""}>?</option>
+            <option value="nein" ${allergieWert === "nein" ? "selected" : ""}>nein</option>
+            <option value="ja" ${allergieWert === "ja" ? "selected" : ""}>ja</option>
+        </select>`;
+
         tr.innerHTML = `
             <td class="col-nr">${s.id}</td>
             <td class="col-name">${s.vorname} ${s.name}</td>
@@ -317,6 +341,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
             <td class="col-auff">${auffSelect}</td>
             <td class="col-migration">${migSelect}</td>
             <td class="col-sprengel">${sprengelWert ? `<span class="sprengel-tag">${sprengelWert}</span>` : '<span class="text-muted">–</span>'}</td>
+            <td class="col-allergie">${allergieSelect}</td>
             <td class="col-wuensche">
                 <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche" data-max="4"></div>
             </td>
@@ -330,7 +355,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
         if (hatHinweise) {
             const hinweisTr = document.createElement("tr");
             hinweisTr.className = "validierung-hinweis-row";
-            hinweisTr.innerHTML = `<td colspan="8">${hinweiseMap[s.id].map(h =>
+            hinweisTr.innerHTML = `<td colspan="9">${hinweiseMap[s.id].map(h =>
                 `<div class="validierung-hinweis-item">⚠ <strong>${h.spalte}</strong>: ${h.hinweis}</div>`
             ).join("")}</td>`;
             schuelerEditBody.appendChild(hinweisTr);
@@ -512,6 +537,7 @@ confirmDataBtn.addEventListener("click", async () => {
         const geschlechtSel = document.querySelector(`.edit-geschlecht[data-schueler-id="${s.id}"]`);
         const auffSel = document.querySelector(`.edit-auff[data-schueler-id="${s.id}"]`);
         const migSel = document.querySelector(`.edit-migration[data-schueler-id="${s.id}"]`);
+        const allergieSel = document.querySelector(`.edit-allergie[data-schueler-id="${s.id}"]`);
 
         zuordnungen.push({
             schueler_id: s.id,
@@ -520,6 +546,7 @@ confirmDataBtn.addEventListener("click", async () => {
             geschlecht: geschlechtSel?.value || null,
             auffaelligkeit: auffSel ? parseInt(auffSel.value) : null,
             migration: migSel?.value || null,
+            hundehaarallergie: allergieSel ? allergieSel.value : null,
         });
     }
 
@@ -601,10 +628,14 @@ startBtn.addEventListener("click", async () => {
     progressText.textContent = "Optimierung wird gestartet...";
 
     try {
-        const params = new URLSearchParams({
+        const paramsObj = {
             anzahl_klassen: anzahlKlassen.value,
             iterationen: iterationen.value,
-        });
+        };
+        if (schulhundKlasse.value !== "") {
+            paramsObj.schulhund_klasse = schulhundKlasse.value;
+        }
+        const params = new URLSearchParams(paramsObj);
 
         const res = await fetch(`${API}/optimierung?${params}`, { method: "POST" });
         if (!res.ok) {
@@ -694,7 +725,7 @@ function renderAlles(data) {
     renderSummary(data.pruefung);
     renderPruefungTabelle(data.pruefung);
     renderWuensche(data.pruefung);
-    renderKlassen(data.klassen);
+    renderKlassen(data.klassen, data.pruefung);
 
     dashboard.classList.remove("hidden");
     klassenSection.classList.remove("hidden");
@@ -759,6 +790,8 @@ function renderPruefungTabelle(pruefung) {
     const thead = pruefungTable.querySelector("thead");
     const tbody = pruefungTable.querySelector("tbody");
     const hatSprengel = pruefung.zusammenfassung.hat_sprengel;
+    const hatSchulhund = pruefung.schulhund_klasse_index !== null
+        && pruefung.schulhund_klasse_index !== undefined;
 
     let headerHtml = `<tr>
         <th>Klasse</th>
@@ -769,6 +802,7 @@ function renderPruefungTabelle(pruefung) {
         <th>Wunsch %</th><th></th>
         <th>Trenn.</th><th></th>`;
     if (hatSprengel) headerHtml += `<th title="Kinder ohne Laufpartner (gleicher Sprengel)">Ohne LP</th><th></th>`;
+    if (hatSchulhund) headerHtml += `<th title="🐕 Schulhund-Klasse">🐕</th><th></th>`;
     headerHtml += `</tr>`;
     thead.innerHTML = headerHtml;
 
@@ -796,6 +830,15 @@ function renderPruefungTabelle(pruefung) {
                 : "";
             rowHtml += `<td title="${lpTitle}">${kp.ohne_laufpartner}</td>`;
             rowHtml += `<td><span class="ampel-cell ${kp.laufpartner_ampel}"></span></td>`;
+        }
+        if (hatSchulhund) {
+            if (kp.ist_schulhund_klasse) {
+                const tooltip = `Allergiker: ${kp.schulhund_allergiker}, Unbekannt: ${kp.schulhund_unbekannt}`;
+                rowHtml += `<td title="${tooltip}">${kp.schulhund_allergiker + kp.schulhund_unbekannt}</td>`;
+                rowHtml += `<td><span class="ampel-cell ${kp.schulhund_ampel}"></span></td>`;
+            } else {
+                rowHtml += `<td class="text-muted">–</td><td></td>`;
+            }
         }
         rowHtml += `</tr>`;
         return rowHtml;
@@ -825,18 +868,27 @@ function renderWuensche(pruefung) {
 // Klassenlisten mit Drag & Drop
 // ==========================================================
 
-function renderKlassen(klassen) {
-    klassenGrid.innerHTML = klassen.map((klasse, klassenIdx) => `
-        <div class="klasse-card" data-klasse-idx="${klassenIdx}">
+function renderKlassen(klassen, pruefung) {
+    const schulhundIdx = pruefung && pruefung.schulhund_klasse_index != null
+        ? pruefung.schulhund_klasse_index : null;
+    klassenGrid.innerHTML = klassen.map((klasse, klassenIdx) => {
+        const istSchulhund = schulhundIdx === klassenIdx;
+        const klasseCls = istSchulhund ? "klasse-card klasse-schulhund" : "klasse-card";
+        const header = istSchulhund
+            ? `<span>🐕 Klasse ${klasse.name} <small>(Schulhund)</small></span>`
+            : `<span>Klasse ${klasse.name}</span>`;
+        return `
+        <div class="${klasseCls}" data-klasse-idx="${klassenIdx}">
             <div class="klasse-header">
-                <span>Klasse ${klasse.name}</span>
+                ${header}
                 <span class="klasse-stats">${klasse.schueler.length} Schüler</span>
             </div>
             <div class="klasse-schueler-list" data-klasse-idx="${klassenIdx}">
                 ${klasse.schueler.map(s => schuelerRowHtml(s)).join("")}
             </div>
         </div>
-    `).join("");
+        `;
+    }).join("");
 
     initDragAndDrop();
 }
@@ -850,11 +902,22 @@ function schuelerRowHtml(s) {
         ? `<span class="sprengel-badge" title="Sprengel: ${s.sprengel}">${s.sprengel}</span>`
         : "";
 
+    let rowCls = "schueler-row";
+    let allergieIcon = "";
+    if (s.hundehaarallergie === "ja") {
+        rowCls += " schueler-allergie";
+        allergieIcon = `<span class="allergie-icon" title="Hundehaarallergie">🐕</span>`;
+    } else if (s.hundehaarallergie === "") {
+        // leer-String kennzeichnet "unbekannt"; nur markieren, wenn die Spalte überhaupt verwendet wird
+        // (das Feld ist immer leer auf alten Daten ohne Spalte — wir markieren nur, wenn explizit gesetzt wurde)
+    }
+
     return `
-        <div class="schueler-row" draggable="true" data-schueler-id="${s.id}">
+        <div class="${rowCls}" draggable="true" data-schueler-id="${s.id}">
             <span class="geschlecht-badge ${s.geschlecht}">${s.geschlecht.toUpperCase()}</span>
             <span class="schueler-name">${s.vorname} ${s.name}</span>
             ${sprengelHtml}
+            ${allergieIcon}
             <span class="${auffTag}">${s.auffaelligkeit}</span>
         </div>
     `;
@@ -991,10 +1054,21 @@ async function sendeVerschiebung(neueEinteilung) {
             entferneTrennungsWarnung();
         }
 
+        // Warnung bei Schulhund-Verletzungen
+        if (data.schulhund_verletzt && data.schulhund_verletzt.length > 0) {
+            const namen = data.schulhund_verletzt
+                .map(v => `${v.schueler.name} (${v.status === "ja" ? "Allergie" : "ohne Angabe"})`)
+                .join(", ");
+            alert(
+                "⚠️ Schulhund-Klasse:\n\n" + namen +
+                "\n\nDiese Schüler sollten nicht in der Schulhund-Klasse sein."
+            );
+        }
+
     } catch (err) {
         console.error("Verschiebung fehlgeschlagen:", err);
         if (currentData) {
-            renderKlassen(currentData.klassen);
+            renderKlassen(currentData.klassen, currentData.pruefung);
         }
     }
 }
@@ -1129,6 +1203,14 @@ window.loadSingleAssignment = async function (id) {
 
         const data = await res.json();
         currentData = data;
+
+        // Schulhund-Klasse aus gespeichertem Assignment vorbelegen
+        aktualisiereSchulhundDropdown();
+        if (data.schulhund_klasse !== null && data.schulhund_klasse !== undefined) {
+            schulhundKlasse.value = String(data.schulhund_klasse);
+        } else {
+            schulhundKlasse.value = "";
+        }
 
         if (data.hat_einteilung) {
             renderAlles(data);

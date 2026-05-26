@@ -156,7 +156,7 @@ def erzwinge_schulhund_klasse(
 
         if partner_gefunden is None:
             log.append({
-                "schueler_id": sid_raus,
+                "schueler_id": int(sid_raus),
                 "name": name_von(sid_raus),
                 "von_klasse": schulhund_klasse + 1,
                 "nach_klasse": None,
@@ -180,7 +180,7 @@ def erzwinge_schulhund_klasse(
         klassen[partner_klasse_idx].append(sid_raus)
 
         log.append({
-            "schueler_id": sid_raus,
+            "schueler_id": int(sid_raus),
             "name": name_von(sid_raus),
             "von_klasse": schulhund_klasse + 1,
             "nach_klasse": partner_klasse_idx + 1,
@@ -191,4 +191,6 @@ def erzwinge_schulhund_klasse(
             "status": "ok",
         })
 
+    # Sicherstellen: alle IDs als reine Python-ints zurückgeben (keine numpy int64)
+    klassen = [[int(sid) for sid in k] for k in klassen]
     return klassen, log

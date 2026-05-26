@@ -893,11 +893,15 @@ def save_assignment(body: AssignmentSaveRequest):
     
     file_path = save_dir / f"{file_id}.json"
     
+    einteilung_serialisierbar = None
+    if _state["einteilung"] is not None:
+        einteilung_serialisierbar = [[int(sid) for sid in klasse] for klasse in _state["einteilung"]]
+
     data = {
         "id": file_id,
         "name": body.name,
         "timestamp": timestamp,
-        "einteilung": _state["einteilung"],
+        "einteilung": einteilung_serialisierbar,
         "schulhund_klasse": _state.get("schulhund_klasse"),
         "df_json": _state["df"].to_dict(orient="split")
     }

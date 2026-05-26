@@ -33,6 +33,7 @@ a = Analysis(
         "backend.optimierung_wrapper",
         "backend.spaltenmapping",
         "backend.vorlage",
+        "backend.schulhund",
         # Uvicorn-Interna
         "uvicorn",
         "uvicorn.logging",

@@ -1370,6 +1370,10 @@ tr.validierung-fehler td {
     background-color: rgba(245, 185, 33, 0.10);
 }
 
+.schueler-allergie-unbekannt {
+    background-color: rgba(128, 128, 128, 0.12);
+}
+
 .allergie-icon {
     font-size: 0.9em;
     margin-left: 0.25rem;

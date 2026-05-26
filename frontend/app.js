@@ -871,6 +871,7 @@ function renderWuensche(pruefung) {
 function renderKlassen(klassen, pruefung) {
     const schulhundIdx = pruefung && pruefung.schulhund_klasse_index != null
         ? pruefung.schulhund_klasse_index : null;
+    const markierUnbekannte = schulhundIdx !== null;
     klassenGrid.innerHTML = klassen.map((klasse, klassenIdx) => {
         const istSchulhund = schulhundIdx === klassenIdx;
         const klasseCls = istSchulhund ? "klasse-card klasse-schulhund" : "klasse-card";
@@ -884,7 +885,7 @@ function renderKlassen(klassen, pruefung) {
                 <span class="klasse-stats">${klasse.schueler.length} Schüler</span>
             </div>
             <div class="klasse-schueler-list" data-klasse-idx="${klassenIdx}">
-                ${klasse.schueler.map(s => schuelerRowHtml(s)).join("")}
+                ${klasse.schueler.map(s => schuelerRowHtml(s, markierUnbekannte)).join("")}
             </div>
         </div>
         `;
@@ -893,7 +894,7 @@ function renderKlassen(klassen, pruefung) {
     initDragAndDrop();
 }
 
-function schuelerRowHtml(s) {
+function schuelerRowHtml(s, markierUnbekannte = false) {
     let auffTag = "auffaelligkeit-tag";
     if (s.auffaelligkeit >= 5) auffTag += " sehr-hoch";
     else if (s.auffaelligkeit >= 3) auffTag += " hoch";
@@ -907,9 +908,9 @@ function schuelerRowHtml(s) {
     if (s.hundehaarallergie === "ja") {
         rowCls += " schueler-allergie";
         allergieIcon = `<span class="allergie-icon" title="Hundehaarallergie">🐕</span>`;
-    } else if (s.hundehaarallergie === "") {
-        // leer-String kennzeichnet "unbekannt"; nur markieren, wenn die Spalte überhaupt verwendet wird
-        // (das Feld ist immer leer auf alten Daten ohne Spalte — wir markieren nur, wenn explizit gesetzt wurde)
+    } else if (s.hundehaarallergie === "" && markierUnbekannte) {
+        rowCls += " schueler-allergie-unbekannt";
+        allergieIcon = `<span class="allergie-icon" title="Allergie-Status unbekannt — wird wie Allergie behandelt">🐕❓</span>`;
     }
 
     return `

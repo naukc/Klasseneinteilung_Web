@@ -64,6 +64,7 @@ _state = {
     "upload_path": None,
     "raw_spalten": None,       # Roh-Spalten der hochgeladenen Datei
     "mapping_vorschlaege": None,  # Ergebnis von finde_spalten_mapping()
+    "schulhund_klasse": None,  # Index der Schulhund-Klasse (0-basiert) oder None
 }
 
 # Letzter Heartbeat-Zeitstempel (für Auto-Shutdown im gepackten Modus)
@@ -87,6 +88,7 @@ class WunschZuordnung(BaseModel):
     geschlecht: str | None = None
     auffaelligkeit: int | None = None
     migration: str | None = None
+    hundehaarallergie: str | None = None
 
 
 class WuenscheSpeichern(BaseModel):
@@ -288,6 +290,11 @@ def _schueler_liste_aus_df(df: pd.DataFrame) -> list[dict]:
         sprengel_wert = row.get("Sprengel", "")
         sprengel = str(sprengel_wert).strip() if pd.notna(sprengel_wert) else ""
 
+        from backend.schulhund import SPALTE as SCHULHUND_SPALTE, normalisiere_allergie_wert
+        hundehaarallergie = ""
+        if SCHULHUND_SPALTE in df.columns:
+            hundehaarallergie = normalisiere_allergie_wert(row.get(SCHULHUND_SPALTE, ""))
+
         schueler.append({
             "id": int(sid),
             "vorname": str(row.get("Vorname", "")),
@@ -296,6 +303,7 @@ def _schueler_liste_aus_df(df: pd.DataFrame) -> list[dict]:
             "auffaelligkeit": auff,
             "migration": str(row.get("Migrationshintergrund / 2. Staatsangehörigkeit", "")),
             "sprengel": sprengel,
+            "hundehaarallergie": hundehaarallergie,
             "wuensche": wuensche,
             "trennen_von": trennen_von,
         })
@@ -514,6 +522,11 @@ def wuensche_speichern(body: WuenscheSpeichern):
             mig_spalte = "Migrationshintergrund / 2. Staatsangehörigkeit"
             if mig_spalte in df.columns:
                 df.at[sid, mig_spalte] = z.migration
+        if z.hundehaarallergie is not None:
+            from backend.schulhund import SPALTE as SCHULHUND_SPALTE, normalisiere_allergie_wert
+            if SCHULHUND_SPALTE not in df.columns:
+                df[SCHULHUND_SPALTE] = ""
+            df.at[sid, SCHULHUND_SPALTE] = normalisiere_allergie_wert(z.hundehaarallergie)
 
     # 2. Wünsche/Trennungen einfügen
     zuordnungen = [z.model_dump() for z in body.zuordnungen]
@@ -550,6 +563,7 @@ def starte_optimierung(
     iterationen: int = OPT_ITERATIONEN,
     start_temp: float = OPT_START_TEMPERATUR,
     cooling_rate: float = OPT_COOLING_RATE,
+    schulhund_klasse: int | None = None,
 ):
     """
     Einteilung mit Simulated Annealing optimieren.
@@ -557,6 +571,13 @@ def starte_optimierung(
     """
     if _state["df"] is None:
         raise HTTPException(status_code=400, detail="Bitte zuerst eine Datei hochladen.")
+
+    if schulhund_klasse is not None and (schulhund_klasse < 0 or schulhund_klasse >= anzahl_klassen):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Schulhund-Klassen-Index {schulhund_klasse} liegt außerhalb [0, {anzahl_klassen - 1}].",
+        )
+    _state["schulhund_klasse"] = schulhund_klasse
 
     fortschritt_queue: queue.Queue = queue.Queue()
 
@@ -586,14 +607,22 @@ def starte_optimierung(
                 iterationen=iterationen,
                 start_temp=start_temp,
                 cooling_rate=cooling_rate,
+                schulhund_klasse=schulhund_klasse,
             )
 
             # Harte Regel: ALLE Trennungen erzwingen (Post-Processing)
             finale_einteilung, trenn_log = _erzwinge_trennungen(finale_einteilung, df)
 
+            # Harte Regel: Schulhund-Klasse darf keine Allergiker/Unbekannten enthalten
+            from backend.schulhund import erzwinge_schulhund_klasse
+            trennungspaare = _alle_trennungspaare(df)
+            finale_einteilung, schulhund_log = erzwinge_schulhund_klasse(
+                finale_einteilung, df, schulhund_klasse, trennungspaare
+            )
+
             _state["einteilung"] = finale_einteilung
 
-            pruefung = pruefe_einteilung(finale_einteilung, df)
+            pruefung = pruefe_einteilung(finale_einteilung, df, schulhund_klasse=schulhund_klasse)
             _state["pruefung"] = pruefung
 
             antwort = {
@@ -607,6 +636,9 @@ def starte_optimierung(
 
             if trenn_log:
                 antwort["trennungen_erzwungen"] = trenn_log
+
+            if schulhund_log:
+                antwort["schulhund_verschoben"] = schulhund_log
 
             fortschritt_queue.put(antwort)
 
@@ -695,9 +727,24 @@ def verschiebe_schueler(neue_einteilung: list[list[int]]):
                 "klasse": zuordnung[a] + 1,
             })
 
+    # Schulhund-Verletzungen sammeln
+    schulhund_verletzt = []
+    schulhund_klasse_idx = _state.get("schulhund_klasse")
+    if schulhund_klasse_idx is not None and "Hundehaarallergie" in df.columns:
+        from backend.schulhund import normalisiere_allergie_wert, darf_in_schulhund_klasse, SPALTE
+        if 0 <= schulhund_klasse_idx < len(neue_einteilung):
+            for sid in neue_einteilung[schulhund_klasse_idx]:
+                wert = normalisiere_allergie_wert(df.at[sid, SPALTE]) if sid in df.index else ""
+                if not darf_in_schulhund_klasse(wert):
+                    name = f"{df.at[sid, 'Vorname']} {df.at[sid, 'Name']}".strip() if sid in df.index else str(sid)
+                    schulhund_verletzt.append({
+                        "schueler": {"id": int(sid), "name": name},
+                        "status": "ja" if wert == "ja" else "unbekannt",
+                    })
+
     _state["einteilung"] = neue_einteilung
 
-    pruefung = pruefe_einteilung(neue_einteilung, df)
+    pruefung = pruefe_einteilung(neue_einteilung, df, schulhund_klasse=schulhund_klasse_idx)
     _state["pruefung"] = pruefung
 
     antwort = {
@@ -708,6 +755,9 @@ def verschiebe_schueler(neue_einteilung: list[list[int]]):
 
     if verletzungen:
         antwort["trennungen_verletzt"] = verletzungen
+
+    if schulhund_verletzt:
+        antwort["schulhund_verletzt"] = schulhund_verletzt
 
     return antwort
 
@@ -838,6 +888,7 @@ def save_assignment(body: AssignmentSaveRequest):
         "name": body.name,
         "timestamp": timestamp,
         "einteilung": _state["einteilung"],
+        "schulhund_klasse": _state.get("schulhund_klasse"),
         "df_json": _state["df"].to_dict(orient="split")
     }
     
@@ -892,24 +943,28 @@ def load_assignment(assignment_id: str):
         
         _state["df"] = df
         _state["einteilung"] = data.get("einteilung")
-        
+        _state["schulhund_klasse"] = data.get("schulhund_klasse")
+
         if _state["einteilung"]:
-            _state["pruefung"] = pruefe_einteilung(_state["einteilung"], df)
+            _state["pruefung"] = pruefe_einteilung(
+                _state["einteilung"], df, schulhund_klasse=_state["schulhund_klasse"]
+            )
             klassen = _klassen_daten_aus_einteilung(df, _state["einteilung"])
             pruefung_dict = asdict(_state["pruefung"])
         else:
             _state["pruefung"] = None
             klassen = []
             pruefung_dict = None
-            
-        _state["upload_path"] = None 
-        
+
+        _state["upload_path"] = None
+
         return {
             "status": "ok",
             "anzahl_schueler": len(df),
             "klassen": klassen,
             "pruefung": pruefung_dict,
             "hat_einteilung": _state["einteilung"] is not None,
+            "schulhund_klasse": _state["schulhund_klasse"],
             "schueler": _schueler_liste_aus_df(df) if not _state["einteilung"] else []
         }
         

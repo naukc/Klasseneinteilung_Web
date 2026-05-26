@@ -104,6 +104,12 @@ OPTIONALE_SPALTEN: dict[str, dict] = {
             "wohngebiet", "einzugsgebiet", "stadtteil",
         ],
     },
+    "Hundehaarallergie": {
+        "aliasse": [
+            "hundehaarallergie", "hundeallergie", "hund-allergie",
+            "allergie hund", "allergie", "tierhaarallergie",
+        ],
+    },
 }
 
 
@@ -255,6 +261,11 @@ def baue_dataframe(upload_path: str, mapping: dict[str, str]) -> pd.DataFrame:
         df["Auffaelligkeit_Score"] = pd.to_numeric(
             df["Auffaelligkeit_Score"], errors="coerce"
         ).fillna(0)
+
+    # Hundehaarallergie auf 'ja'/'nein'/'' normalisieren
+    if "Hundehaarallergie" in df.columns:
+        from backend.schulhund import normalisiere_allergie_wert
+        df["Hundehaarallergie"] = df["Hundehaarallergie"].apply(normalisiere_allergie_wert)
 
     return df
 

@@ -47,7 +47,7 @@ setInterval(() => {
 })();
 
 // --- Erlaubte Werte (synchron mit Backend) ---
-const ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13];
+const ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13, 21];
 const ERLAUBTE_GESCHLECHT = ["m", "w"];
 const ERLAUBTE_MIGRATION = ["Ja", "Nein"];
 

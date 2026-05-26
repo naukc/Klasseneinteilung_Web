@@ -18,7 +18,7 @@ from openpyxl.utils import get_column_letter
 # ---------------------------------------------------------------------------
 # Erlaubte Werte (zentral definiert – wird auch von der Validierung genutzt)
 # ---------------------------------------------------------------------------
-ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13]  # Fibonacci-Skala
+ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13, 21]  # Fibonacci-Skala
 ERLAUBTE_GESCHLECHT = ["m", "w"]
 ERLAUBTE_MIGRATION = ["Ja", "Nein"]
 ERLAUBTE_HUNDEHAARALLERGIE = ["Ja", "Nein"]
@@ -64,6 +64,7 @@ VORLAGE_SPALTEN = [
             "  5 = mittel\n"
             "  8 = hoch\n"
             "  13 = sehr hoch\n"
+            "  21 = extrem hoch\n"
             "\n"
             "Feld leer lassen, wenn keine\n"
             "Auffälligkeit vorliegt."
@@ -71,7 +72,7 @@ VORLAGE_SPALTEN = [
         "beispiele": [2, 1],
         "validierung": [str(x) for x in ERLAUBTE_AUFFAELLIGKEIT],
         "validierung_fehler": (
-            "Erlaubte Werte: 1, 2, 3, 5, 8, 13.\n"
+            "Erlaubte Werte: 1, 2, 3, 5, 8, 13, 21.\n"
             "Feld leer lassen bei keiner Auffälligkeit."
         ),
     },
@@ -142,6 +143,7 @@ ANLEITUNGSTEXTE = [
     "     5 = mittel",
     "     8 = hoch",
     "     13 = sehr hoch",
+    "     21 = extrem hoch",
     "     (leer lassen = keine Auffälligkeit → wird als 0 gewertet)",
     "",
     "  Migrationshintergrund / 2. Staatsangehörigkeit:",

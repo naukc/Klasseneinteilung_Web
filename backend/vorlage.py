@@ -21,6 +21,7 @@ from openpyxl.utils import get_column_letter
 ERLAUBTE_AUFFAELLIGKEIT = [1, 2, 3, 5, 8, 13]  # Fibonacci-Skala
 ERLAUBTE_GESCHLECHT = ["m", "w"]
 ERLAUBTE_MIGRATION = ["Ja", "Nein"]
+ERLAUBTE_HUNDEHAARALLERGIE = ["Ja", "Nein"]
 
 # ---------------------------------------------------------------------------
 # Spalten-Definition (nur Stammdaten – Wünsche/Trennungen kommen über die UI)
@@ -102,6 +103,24 @@ VORLAGE_SPALTEN = [
         ),
         "beispiele": ["Nord", "Süd"],
     },
+    {
+        "name": "Hundehaarallergie",
+        "breite": 20,
+        "kommentar": (
+            "Hat das Kind eine Hundehaarallergie?\n"
+            "Erlaubte Werte:\n"
+            "  Ja\n"
+            "  Nein\n"
+            "\n"
+            "Wird benötigt, wenn eine Klasse einen\n"
+            "Schulhund hat. Kinder mit Allergie oder\n"
+            "ohne Angabe werden aus der Schulhund-\n"
+            "Klasse herausgehalten."
+        ),
+        "beispiele": ["Nein", "Ja"],
+        "validierung": ERLAUBTE_HUNDEHAARALLERGIE,
+        "validierung_fehler": "Bitte nur 'Ja' oder 'Nein' eingeben.",
+    },
 ]
 
 ANLEITUNGSTEXTE = [
@@ -135,6 +154,12 @@ ANLEITUNGSTEXTE = [
     "     Jedes Kind soll mind. ein anderes Kind aus dem gleichen",
     "     Sprengel in seiner Klasse haben (Schulweg-Partner).",
     "     (optional – kann leer gelassen werden)",
+    "",
+    "  Hundehaarallergie:",
+    "     Ja  = Kind hat eine Hundehaarallergie",
+    "     Nein = Kind hat keine Allergie",
+    "     (leer = unbekannt — wird wie 'Ja' behandelt, wenn",
+    "      eine Schulhund-Klasse gewählt wird)",
     "",
     "Hinweise:",
     "  - Schüler-IDs werden automatisch vergeben.",

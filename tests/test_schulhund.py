@@ -8,6 +8,7 @@ from backend.schulhund import (
     darf_in_schulhund_klasse,
     zaehle_allergiker_in_klasse,
 )
+from backend.schulhund import erzwinge_schulhund_klasse
 
 
 class TestNormalisierung:
@@ -88,3 +89,88 @@ class TestZaehleAllergiker:
         allergiker, unbekannt = zaehle_allergiker_in_klasse([2, 4], df)
         assert allergiker == 0
         assert unbekannt == 0
+
+
+class TestErzwingeSchulhundKlasse:
+    def test_keine_aenderung_wenn_klasse_sauber(self):
+        df = pd.DataFrame({
+            "Hundehaarallergie": ["nein", "nein", "ja", "ja"],
+        }, index=[1, 2, 3, 4])
+        einteilung = [[1, 2], [3, 4]]
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, set())
+        assert neu == [[1, 2], [3, 4]]
+        assert log == []
+
+    def test_tauscht_allergiker_raus(self):
+        df = pd.DataFrame({
+            "Vorname": ["A", "B", "C", "D"],
+            "Name": ["x", "x", "x", "x"],
+            "Hundehaarallergie": ["ja", "nein", "nein", "nein"],
+        }, index=[1, 2, 3, 4])
+        einteilung = [[1, 2], [3, 4]]  # Klasse 0 (Schulhund): hat Allergiker 1
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, set())
+        # Klasse 0 darf keinen Allergiker mehr haben
+        klasse_0 = neu[0]
+        for sid in klasse_0:
+            assert df.at[sid, "Hundehaarallergie"] != "ja"
+            assert df.at[sid, "Hundehaarallergie"] != ""
+        # Klassengrößen erhalten
+        assert sorted(len(k) for k in neu) == [2, 2]
+        # Log enthält einen Tausch-Eintrag
+        assert len(log) == 1
+        assert log[0]["status"] == "ok"
+
+    def test_tauscht_unbekannte_raus(self):
+        df = pd.DataFrame({
+            "Vorname": ["A", "B", "C", "D"],
+            "Name": ["x", "x", "x", "x"],
+            "Hundehaarallergie": ["", "nein", "nein", "nein"],
+        }, index=[1, 2, 3, 4])
+        einteilung = [[1, 2], [3, 4]]
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, set())
+        for sid in neu[0]:
+            assert df.at[sid, "Hundehaarallergie"] == "nein"
+        assert len(log) == 1
+
+    def test_respektiert_trennungen(self):
+        df = pd.DataFrame({
+            "Vorname": ["A", "B", "C", "D"],
+            "Name": ["x", "x", "x", "x"],
+            "Hundehaarallergie": ["ja", "nein", "nein", "nein"],
+        }, index=[1, 2, 3, 4])
+        einteilung = [[1, 2], [3, 4]]
+        trennungspaare = {frozenset({2, 3})}
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, trennungspaare)
+        for sid in neu[0]:
+            assert df.at[sid, "Hundehaarallergie"] == "nein"
+        # Trennung muss eingehalten bleiben
+        for paar in trennungspaare:
+            a, b = sorted(paar)
+            klasse_a = next(i for i, k in enumerate(neu) if a in k)
+            klasse_b = next(i for i, k in enumerate(neu) if b in k)
+            assert klasse_a != klasse_b
+
+    def test_fehler_wenn_kein_partner_verfuegbar(self):
+        df = pd.DataFrame({
+            "Vorname": ["A", "B", "C", "D"],
+            "Name": ["x", "x", "x", "x"],
+            "Hundehaarallergie": ["ja", "ja", "ja", "ja"],
+        }, index=[1, 2, 3, 4])
+        einteilung = [[1, 2], [3, 4]]
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, set())
+        # Keine Tausch-Partner verfügbar → Allergiker bleiben, Log mit Fehler
+        assert any(eintrag["status"] == "fehler" for eintrag in log)
+
+    def test_keine_aenderung_wenn_klasse_none(self):
+        df = pd.DataFrame({"Hundehaarallergie": ["ja"]}, index=[1])
+        einteilung = [[1]]
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, None, set())
+        assert neu == [[1]]
+        assert log == []
+
+    def test_keine_aenderung_wenn_spalte_fehlt(self):
+        df = pd.DataFrame({"Vorname": ["A"]}, index=[1])
+        einteilung = [[1]]
+        neu, log = erzwinge_schulhund_klasse(einteilung, df, 0, set())
+        assert neu == [[1]]
+        assert log == []

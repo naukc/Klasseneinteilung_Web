@@ -7,12 +7,15 @@ noch offen ist. Wird der Tab geschlossen, beendet sich die App
 automatisch nach kurzer Wartezeit.
 """
 
+import faulthandler
 import os
 import subprocess
 import sys
 import socket
 import threading
 import time
+import traceback
+from pathlib import Path
 
 import uvicorn
 
@@ -20,6 +23,57 @@ import uvicorn
 # Heartbeat-Konfiguration
 HEARTBEAT_TIMEOUT = 15  # Sekunden ohne Heartbeat → Shutdown
 HEARTBEAT_CHECK_INTERVALL = 3  # Prüf-Intervall in Sekunden
+
+
+def _log_pfad() -> Path:
+    """OS-spezifisches Log-Verzeichnis für Diagnose-Output."""
+    if sys.platform == "darwin":
+        base = Path("~/Library/Logs/Klasseneinteilung").expanduser()
+    elif sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", "~")).expanduser() / "Klasseneinteilung" / "logs"
+    else:
+        base = Path("~/.local/share/Klasseneinteilung/logs").expanduser()
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "runtime.log"
+
+
+def _setup_diagnose_logging():
+    """
+    Im gepackten Modus: stderr/stdout in Logdatei umleiten und alle
+    uncaught Exceptions + Thread-Crashes + Segfaults erfassen.
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+
+    log_file = _log_pfad()
+    f = open(log_file, "w", buffering=1, encoding="utf-8", errors="replace")
+    sys.stdout = f
+    sys.stderr = f
+
+    # Native Crashes (Segfaults, Stack-Overflows)
+    try:
+        faulthandler.enable(f)
+    except Exception:
+        pass
+
+    # Uncaught Python-Exceptions im Main-Thread
+    def _excepthook(exc_type, exc_value, exc_tb):
+        f.write("\n=== UNCAUGHT EXCEPTION ===\n")
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        f.flush()
+    sys.excepthook = _excepthook
+
+    # Exceptions in beliebigen Threads
+    def _thread_excepthook(args):
+        f.write(f"\n=== THREAD EXCEPTION ({args.thread.name}) ===\n")
+        traceback.print_exception(args.exc_type, args.exc_value, args.exc_traceback, file=f)
+        f.flush()
+    threading.excepthook = _thread_excepthook
+
+    print(f"=== Klasseneinteilung gestartet (PID {os.getpid()}) ===", flush=True)
+    print(f"Plattform: {sys.platform}, Python: {sys.version}", flush=True)
+    print(f"Log-Pfad: {log_file}", flush=True)
+    return f
 
 
 def finde_freien_port() -> int:
@@ -99,6 +153,9 @@ def heartbeat_watchdog() -> None:
 
 
 def main() -> None:
+    # Diagnose-Logging als erstes — fängt auch frühe Crashes ab
+    _setup_diagnose_logging()
+
     # Im gepackten Modus: Arbeitsverzeichnis auf _MEIPASS setzen,
     # damit relative Imports funktionieren
     if getattr(sys, "frozen", False):

@@ -94,6 +94,7 @@ const schuelerEditSection = document.getElementById("schuelerEditSection");
 const schuelerEditBody = document.getElementById("schuelerEditBody");
 const schuelerAnzahlBadge = document.getElementById("schuelerAnzahlBadge");
 const confirmDataBtn = document.getElementById("confirmDataBtn");
+const exportSchuelerlisteBtn = document.getElementById("exportSchuelerlisteBtn");
 const schulhundKlasse = document.getElementById("schulhundKlasse");
 
 function aktualisiereSchulhundDropdown() {
@@ -521,10 +522,8 @@ function initAutocomplete(container, eigeneId, maxAuswahl, vorauswahl) {
 // Daten bestätigen → Wünsche speichern
 // ==========================================================
 
-confirmDataBtn.addEventListener("click", async () => {
-    // Zuordnungen + Korrekturen sammeln
+function sammleZuordnungenAusDOM() {
     const zuordnungen = [];
-
     for (const s of schuelerListe) {
         const wuenscheContainer = document.querySelector(
             `.autocomplete-container[data-schueler-id="${s.id}"][data-type="wuensche"]`
@@ -532,8 +531,6 @@ confirmDataBtn.addEventListener("click", async () => {
         const trennungContainer = document.querySelector(
             `.autocomplete-container[data-schueler-id="${s.id}"][data-type="trennung"]`
         );
-
-        // Dropdown-Werte auslesen
         const geschlechtSel = document.querySelector(`.edit-geschlecht[data-schueler-id="${s.id}"]`);
         const auffSel = document.querySelector(`.edit-auff[data-schueler-id="${s.id}"]`);
         const migSel = document.querySelector(`.edit-migration[data-schueler-id="${s.id}"]`);
@@ -549,21 +546,41 @@ confirmDataBtn.addEventListener("click", async () => {
             hundehaarallergie: allergieSel ? allergieSel.value : null,
         });
     }
+    return zuordnungen;
+}
+
+async function postZuordnungen(zuordnungen) {
+    const res = await fetch(`${API}/wuensche-speichern`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zuordnungen }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Speichern fehlgeschlagen");
+    }
+    return res.json();
+}
+
+// Wird vor Optimierung aufgerufen — sorgt dafür, dass im Editor eingetragene
+// Wünsche/Trennungen/Korrekturen sicher im Backend sind, auch wenn der User
+// nicht explizit auf "Daten bestätigen" geklickt hat.
+async function autoSpeichereEditor() {
+    if (schuelerEditSection.classList.contains("hidden")) return;
+    if (!schuelerListe || schuelerListe.length === 0) return;
+    const zuordnungen = sammleZuordnungenAusDOM();
+    if (zuordnungen.length === 0) return;
+    await postZuordnungen(zuordnungen);
+}
+
+confirmDataBtn.addEventListener("click", async () => {
+    const zuordnungen = sammleZuordnungenAusDOM();
 
     try {
         confirmDataBtn.disabled = true;
         confirmDataBtn.textContent = "Speichere…";
 
-        const res = await fetch(`${API}/wuensche-speichern`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ zuordnungen }),
-        });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Speichern fehlgeschlagen");
-        }
-        const data = await res.json();
+        const data = await postZuordnungen(zuordnungen);
 
         // Upload-Info aktualisieren
         uploadInfo.textContent = `${data.anzahl_schueler} Schüler | ${data.wunsch_spalten} Wunschspalten | Trennung: ${data.hat_trennung ? "Ja" : "Nein"} | ${data.schueler_mit_wuenschen} Schüler mit Wünschen`;
@@ -612,6 +629,33 @@ confirmDataBtn.addEventListener("click", async () => {
 
 
 // ==========================================================
+// Schülerliste als Excel exportieren (Backup mit Wünschen/Trennungen)
+// ==========================================================
+
+exportSchuelerlisteBtn.addEventListener("click", async () => {
+    const origLabel = exportSchuelerlisteBtn.innerHTML;
+    try {
+        exportSchuelerlisteBtn.disabled = true;
+        exportSchuelerlisteBtn.innerHTML = `<span class="icon">⏳</span> Speichere…`;
+
+        // Erst die aktuelle DOM-Eingabe ans Backend übertragen, damit
+        // der Export auch wirklich enthält, was der Nutzer gerade getippt hat
+        await autoSpeichereEditor();
+
+        // Download via Browser-Navigation triggern
+        window.location.href = `${API}/schuelerliste-export`;
+    } catch (err) {
+        alert("Export fehlgeschlagen: " + err.message);
+    } finally {
+        setTimeout(() => {
+            exportSchuelerlisteBtn.innerHTML = origLabel;
+            exportSchuelerlisteBtn.disabled = false;
+        }, 1500);
+    }
+});
+
+
+// ==========================================================
 // Optimierung starten
 // ==========================================================
 
@@ -628,6 +672,11 @@ startBtn.addEventListener("click", async () => {
     progressText.textContent = "Optimierung wird gestartet...";
 
     try {
+        // Wünsche/Trennungen/Stammdaten-Korrekturen sicher ans Backend übertragen,
+        // falls der Editor offen ist und der User nicht explizit "Daten bestätigen" geklickt hat.
+        progressText.textContent = "Daten speichern...";
+        await autoSpeichereEditor();
+
         const paramsObj = {
             anzahl_klassen: anzahlKlassen.value,
             iterationen: iterationen.value,

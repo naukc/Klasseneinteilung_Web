@@ -865,6 +865,38 @@ def exportiere_excel():
 
 
 # ---------------------------------------------------------------------------
+# Schülerliste mit Wünschen/Trennungen als Excel exportieren
+# ---------------------------------------------------------------------------
+
+@router.get("/schuelerliste-export")
+def exportiere_schuelerliste():
+    """
+    Exportiert die aktuelle Schülerliste (Stammdaten + Wünsche + Trennungen)
+    als Excel-Datei. Dient als Backup-/Austauschformat — die exportierte Datei
+    kann später wieder hochgeladen werden und behält alle Wünsche bei.
+    """
+    if _state["df"] is None:
+        raise HTTPException(status_code=400, detail="Keine Daten geladen.")
+
+    df = _state["df"].copy()
+    # Schüler-ID als Spalte (statt Index) damit sie beim Re-Import wiederhergestellt wird
+    df.insert(0, "Schüler-ID", df.index)
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+
+    with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Schülerdaten", index=False)
+
+    return FileResponse(
+        tmp_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="Klasseneinteilung_Schuelerliste.xlsx",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Heartbeat (für Auto-Shutdown im gepackten Modus)
 # ---------------------------------------------------------------------------
 

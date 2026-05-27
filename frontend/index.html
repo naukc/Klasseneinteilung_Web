@@ -112,9 +112,14 @@
                     <h2>Schülerliste <span class="badge badge-info" id="schuelerAnzahlBadge"></span></h2>
                     <p class="subtitle">Wünsche und Trennungen zuordnen (optional)</p>
                 </div>
-                <button class="btn btn-success" id="confirmDataBtn">
-                    <span class="icon">✓</span> Daten bestätigen & weiter
-                </button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" id="exportSchuelerlisteBtn" title="Aktuelle Liste inkl. Wünsche/Trennungen als Excel sichern">
+                        <span class="icon">💾</span> Liste als Excel
+                    </button>
+                    <button class="btn btn-success" id="confirmDataBtn">
+                        <span class="icon">✓</span> Daten bestätigen & weiter
+                    </button>
+                </div>
             </div>
             <div class="table-wrapper">
                 <table class="schueler-edit-table" id="schuelerEditTable">

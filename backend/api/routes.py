@@ -590,6 +590,12 @@ def starte_optimierung(
 
     def fortschritt_callback(iteration: int, aktueller_score: float, bester_score: float):
         """Wird vom Optimierer alle 500 Iterationen aufgerufen."""
+        # Watchdog am Leben halten — der Callback läuft im Optimierungs-Thread,
+        # der den GIL ohnehin hält. Direktes Setzen ist robuster als das spätere
+        # Setzen im event_generator, das durch GIL-Contention verzögert sein kann.
+        global letzter_heartbeat
+        letzter_heartbeat = time.time()
+
         fortschritt_queue.put({
             "type": "fortschritt",
             "iteration": iteration,

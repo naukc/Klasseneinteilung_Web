@@ -21,8 +21,8 @@ import uvicorn
 
 
 # Heartbeat-Konfiguration
-HEARTBEAT_TIMEOUT = 15  # Sekunden ohne Heartbeat → Shutdown
-HEARTBEAT_CHECK_INTERVALL = 3  # Prüf-Intervall in Sekunden
+HEARTBEAT_TIMEOUT = 60  # Sekunden ohne Heartbeat → Shutdown
+HEARTBEAT_CHECK_INTERVALL = 5  # Prüf-Intervall in Sekunden
 
 
 def _log_pfad() -> Path:

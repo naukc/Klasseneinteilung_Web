@@ -660,14 +660,21 @@ def starte_optimierung(
         thread = threading.Thread(target=optimierung_thread, daemon=True)
         thread.start()
 
+        global letzter_heartbeat
         while True:
             try:
-                event = fortschritt_queue.get(timeout=30)
+                event = fortschritt_queue.get(timeout=5)
             except queue.Empty:
                 # Keep-alive senden damit die Verbindung nicht abbricht
+                # und damit der Watchdog die App nicht beendet, während die
+                # Optimierung läuft (Browser-Heartbeats können während aktiver
+                # SSE-Streams in einigen Browsern verzögert werden).
+                letzter_heartbeat = time.time()
                 yield "data: {\"type\": \"keepalive\"}\n\n"
                 continue
 
+            # Aktiver Stream → App ist per Definition lebendig
+            letzter_heartbeat = time.time()
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
             if event.get("type") in ("ergebnis", "fehler"):

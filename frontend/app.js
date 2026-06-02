@@ -944,6 +944,61 @@ function renderWaKlassen(pruefung) {
     waKlassenTable.querySelector("tbody").innerHTML = rows;
 }
 
+function renderWaSchueler(pruefung) {
+    const wunschDetails = pruefung.wunsch_details || {};
+    const details = Object.entries(wunschDetails).map(([sid, d]) => ({
+        id: parseInt(sid),
+        ...d,
+    }));
+
+    const filterLeer = waFilterLeer.checked;
+    const filterBeid = waFilterBeidseitig.checked;
+
+    let gefiltert = details;
+    if (filterLeer) gefiltert = gefiltert.filter(d => d.leer_ausgegangen);
+    if (filterBeid) gefiltert = gefiltert.filter(
+        d => d.wuensche.some(w => w.ist_beidseitig && !w.ist_erfuellt)
+    );
+
+    // Sortierung: leer_ausgegangen zuerst, dann nach Anzahl unerfüllter Wünsche absteigend
+    gefiltert.sort((a, b) => {
+        if (a.leer_ausgegangen !== b.leer_ausgegangen) return a.leer_ausgegangen ? -1 : 1;
+        const offenA = a.wuensche_gesamt - a.wuensche_erfuellt;
+        const offenB = b.wuensche_gesamt - b.wuensche_erfuellt;
+        if (offenA !== offenB) return offenB - offenA;
+        return a.schueler_name.localeCompare(b.schueler_name);
+    });
+
+    const rows = gefiltert.map(d => {
+        const chips = d.wuensche.map(w => {
+            const sym = w.ist_beidseitig ? "↔" : "→";
+            const check = w.ist_erfuellt ? "✓" : "✗";
+            const cls = w.ist_erfuellt ? "wa-chip wa-chip-erfuellt" : "wa-chip wa-chip-offen";
+            return `<span class="${cls}">${sym} ${w.wunsch_name} (${w.wunsch_klasse}) ${check}</span>`;
+        }).join(" ");
+
+        const quoteHtml = d.leer_ausgegangen
+            ? `<strong class="text-red">${d.wuensche_erfuellt}/${d.wuensche_gesamt}</strong>`
+            : `${d.wuensche_erfuellt}/${d.wuensche_gesamt}`;
+
+        return `<tr>
+            <td>${d.schueler_name} <span class="muted">(${d.id})</span></td>
+            <td><strong>${d.klasse}</strong></td>
+            <td>${quoteHtml}</td>
+            <td>${chips}</td>
+        </tr>`;
+    }).join("");
+
+    waSchuelerTable.querySelector("tbody").innerHTML = rows;
+}
+
+waFilterLeer.addEventListener("change", () => {
+    if (_wunschAnalyseDaten) renderWaSchueler(_wunschAnalyseDaten);
+});
+waFilterBeidseitig.addEventListener("change", () => {
+    if (_wunschAnalyseDaten) renderWaSchueler(_wunschAnalyseDaten);
+});
+
 
 // ==========================================================
 // Klassenlisten mit Drag & Drop

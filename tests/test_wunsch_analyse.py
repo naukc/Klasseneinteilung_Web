@@ -42,3 +42,33 @@ def test_smoke():
     assert len(df) == 2
     assert df.loc[1, "Wunsch_1"] == 2
     assert df.loc[2, "Wunsch_1"] == 1
+
+
+from backend.pruefungen.wunsch_analyse import baue_wunsch_lookup
+
+
+def test_baue_wunsch_lookup_einfach():
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}, {"vorname": "Carl", "name": "D"}],
+        wunsch_listen=[[2, 3], [1], []],
+    )
+    lookup = baue_wunsch_lookup(df)
+    assert lookup == {1: {2, 3}, 2: {1}, 3: set()}
+
+
+def test_baue_wunsch_lookup_ignoriert_self_und_null():
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[1, 2, 0], [0]],   # Anna wünscht sich selbst (1) → ignorieren, 0 → ignorieren
+    )
+    lookup = baue_wunsch_lookup(df)
+    assert lookup == {1: {2}, 2: set()}
+
+
+def test_baue_wunsch_lookup_ignoriert_ungueltige_ids():
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[99], []],    # 99 existiert nicht
+    )
+    lookup = baue_wunsch_lookup(df)
+    assert lookup == {1: set(), 2: set()}

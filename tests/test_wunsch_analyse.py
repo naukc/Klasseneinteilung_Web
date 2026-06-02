@@ -118,7 +118,6 @@ def test_schueler_details_leer_ausgegangen_flag():
     einteilung = [[1], [2]]
     details = berechne_schueler_wunsch_details(df, einteilung)
     assert details[1]["leer_ausgegangen"] is True
-    assert details[2] if 2 in details else None is None  # Ben hatte gar keinen Wunsch → nicht im Dict
 
 
 def test_schueler_ohne_wuensche_nicht_im_dict():

@@ -72,3 +72,62 @@ def test_baue_wunsch_lookup_ignoriert_ungueltige_ids():
     )
     lookup = baue_wunsch_lookup(df)
     assert lookup == {1: set(), 2: set()}
+
+
+from backend.pruefungen.wunsch_analyse import berechne_schueler_wunsch_details
+
+
+def test_schueler_details_beidseitig_erfuellt():
+    """Anna ↔ Ben, beide in Klasse 0 → beidseitig + erfüllt."""
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[2], [1]],
+    )
+    einteilung = [[1, 2]]
+    details = berechne_schueler_wunsch_details(df, einteilung)
+    assert details[1]["wuensche_gesamt"] == 1
+    assert details[1]["wuensche_erfuellt"] == 1
+    eintrag = details[1]["wuensche"][0]
+    assert eintrag["wunsch_id"] == 2
+    assert eintrag["ist_beidseitig"] is True
+    assert eintrag["ist_erfuellt"] is True
+    assert eintrag["wunsch_klasse"] == "A"
+
+
+def test_schueler_details_einseitig_nicht_erfuellt():
+    """Anna → Ben, Ben hat Anna nicht. Anna in Klasse 0, Ben in Klasse 1."""
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[2], []],
+    )
+    einteilung = [[1], [2]]
+    details = berechne_schueler_wunsch_details(df, einteilung)
+    assert details[1]["wuensche_erfuellt"] == 0
+    eintrag = details[1]["wuensche"][0]
+    assert eintrag["ist_beidseitig"] is False
+    assert eintrag["ist_erfuellt"] is False
+    assert eintrag["wunsch_klasse"] == "B"
+
+
+def test_schueler_details_leer_ausgegangen_flag():
+    """Schüler mit ≥1 Wunsch, aber 0 erfüllt → leer_ausgegangen=True."""
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[2], []],
+    )
+    einteilung = [[1], [2]]
+    details = berechne_schueler_wunsch_details(df, einteilung)
+    assert details[1]["leer_ausgegangen"] is True
+    assert details[2] if 2 in details else None is None  # Ben hatte gar keinen Wunsch → nicht im Dict
+
+
+def test_schueler_ohne_wuensche_nicht_im_dict():
+    """Schüler ohne Wünsche tauchen gar nicht im Details-Dict auf (Tabelle bleibt schlank)."""
+    df = _baue_df(
+        [{"vorname": "Anna", "name": "B"}, {"vorname": "Ben", "name": "C"}],
+        wunsch_listen=[[2], []],
+    )
+    einteilung = [[1, 2]]
+    details = berechne_schueler_wunsch_details(df, einteilung)
+    assert 1 in details
+    assert 2 not in details

@@ -1023,6 +1023,54 @@ function renderWaCluster(pruefung) {
     }).join("");
 }
 
+// ==========================================================
+// Wunsch-Analyse: Tausch-Vorschläge
+// ==========================================================
+
+function renderWaTausch(pruefung) {
+    const vorschlaege = pruefung.tausch_vorschlaege || [];
+    if (vorschlaege.length === 0) {
+        waTauschSection.classList.add("hidden");
+        return;
+    }
+    waTauschSection.classList.remove("hidden");
+
+    waTauschList.innerHTML = vorschlaege.map((v, idx) => {
+        const fmt = (x) => (x > 0 ? "+" : "") + x;
+        const b = v.balance_hinweis;
+        const balanceText = `Geschl.: ${fmt(b.geschlecht_a_klasse_diff)}, Auff.: ${fmt(b.auff_a_klasse_diff)}, Mig.: ${fmt(b.migration_a_klasse_diff)}`;
+        return `<div class="wa-tausch">
+            <div class="wa-tausch-paar"><strong>${v.a.name}</strong> (${v.a.klasse}) ⇄ <strong>${v.b.name}</strong> (${v.b.klasse})</div>
+            <div class="wa-tausch-info">+${v.wuensche_gewinn} Wunsch-Treffer · <span class="muted">${balanceText}</span></div>
+            <button class="btn btn-primary wa-tausch-btn" data-a="${v.a.id}" data-b="${v.b.id}">Tausch durchführen</button>
+        </div>`;
+    }).join("");
+
+    waTauschList.querySelectorAll(".wa-tausch-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const a = parseInt(btn.dataset.a);
+            const b = parseInt(btn.dataset.b);
+            await fuehreTauschDurch(a, b);
+        });
+    });
+}
+
+async function fuehreTauschDurch(aId, bId) {
+    const einteilung = bauEinteilungAusDOM();
+    let klasseA = -1, klasseB = -1;
+    for (let i = 0; i < einteilung.length; i++) {
+        if (einteilung[i].includes(aId)) klasseA = i;
+        if (einteilung[i].includes(bId)) klasseB = i;
+    }
+    if (klasseA === -1 || klasseB === -1 || klasseA === klasseB) {
+        alert("Konnte einen der beiden Schüler nicht zuordnen.");
+        return;
+    }
+    einteilung[klasseA] = einteilung[klasseA].filter(s => s !== aId).concat(bId);
+    einteilung[klasseB] = einteilung[klasseB].filter(s => s !== bId).concat(aId);
+    await sendeVerschiebung(einteilung);
+}
+
 
 // ==========================================================
 // Klassenlisten mit Drag & Drop

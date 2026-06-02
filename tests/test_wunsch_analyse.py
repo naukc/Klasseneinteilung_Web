@@ -293,3 +293,33 @@ def test_tausch_limit_top_10():
     df = _baue_df(daten, wunsch_listen=wuensche)
     vorschlaege = finde_tausch_vorschlaege(df, einteilung)
     assert len(vorschlaege) <= 10
+
+
+from backend.pruefungen.qualitaet import pruefe_einteilung
+
+
+def test_integration_pruefung_enthaelt_wunsch_analyse():
+    df = _baue_df(
+        [
+            {"vorname": "A", "name": "X"},
+            {"vorname": "B", "name": "X"},
+            {"vorname": "C", "name": "X"},
+        ],
+        wunsch_listen=[[2], [1], []],
+    )
+    einteilung = [[1], [2, 3]]
+    ergebnis = pruefe_einteilung(einteilung, df)
+
+    # Pro-Schüler-Details vorhanden
+    assert hasattr(ergebnis, "wunsch_details")
+    assert 1 in ergebnis.wunsch_details
+    assert ergebnis.wunsch_details[1]["leer_ausgegangen"] is True
+
+    # Cluster und Tausch im Top-Level
+    assert hasattr(ergebnis, "wunsch_cluster")
+    assert hasattr(ergebnis, "tausch_vorschlaege")
+
+    # Klassen-Pruefung enthält "leer_ausgegangen" und "beidseitig_zerrissen"
+    klasse_a = ergebnis.klassen[0]
+    assert hasattr(klasse_a, "leer_ausgegangen")
+    assert hasattr(klasse_a, "beidseitig_zerrissen")

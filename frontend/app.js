@@ -344,7 +344,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
             <td class="col-sprengel">${sprengelWert ? `<span class="sprengel-tag">${sprengelWert}</span>` : '<span class="text-muted">–</span>'}</td>
             <td class="col-allergie">${allergieSelect}</td>
             <td class="col-wuensche">
-                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche" data-max="4"></div>
+                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche"></div>
             </td>
             <td class="col-trennung">
                 <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="trennung" data-max="4"></div>
@@ -367,7 +367,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
     document.querySelectorAll(".autocomplete-container").forEach(container => {
         const sid = parseInt(container.dataset.schuelerId);
         const type = container.dataset.type;
-        const max = parseInt(container.dataset.max);
+        const max = parseInt(container.dataset.max) || Infinity;
 
         const s = schueler.find(x => x.id === sid);
         const vorauswahl = type === "wuensche" ? (s.wuensche || []) : (s.trennen_von || []);

@@ -202,3 +202,121 @@ def finde_zerrissene_cluster(
         })
 
     return cluster_liste
+
+
+def _baue_trennungs_set(df: pd.DataFrame) -> set[tuple[int, int]]:
+    """Liefert die Menge der ungeordneten Paare {a, b}, die getrennt werden müssen."""
+    trenn_spalten = [c for c in df.columns if str(c).startswith("Trennen_Von")]
+    paare: set[tuple[int, int]] = set()
+    gueltige = set(int(x) for x in df.index)
+    for sid, row in df.iterrows():
+        sid_int = int(sid)
+        for tc in trenn_spalten:
+            wert = pd.to_numeric(row.get(tc), errors="coerce")
+            if pd.notna(wert):
+                tid = int(wert)
+                if tid != 0 and tid != sid_int and tid in gueltige:
+                    paare.add(tuple(sorted((sid_int, tid))))
+    return paare
+
+
+def _zaehle_erfuellte_wuensche(
+    sid: int,
+    eigene_klasse: set[int],
+    wunsch_lookup: dict[int, set[int]],
+) -> int:
+    """Wie viele Wünsche von sid sind erfüllt (Wunschpartner in eigener Klasse)?"""
+    return sum(1 for wid in wunsch_lookup.get(sid, set()) if wid in eigene_klasse)
+
+
+def finde_tausch_vorschlaege(
+    df: pd.DataFrame,
+    einteilung: list[list[int]],
+    limit: int = 10,
+) -> list[dict]:
+    """
+    Findet Paar-Tausche, die unterm Strich mehr Wünsche erfüllen als sie verlieren.
+    Filtert Vorschläge raus, die Trennungsregeln verletzen würden.
+
+    Returns: Liste sortiert nach Score absteigend, maximal `limit` Einträge.
+    """
+    wunsch_lookup = baue_wunsch_lookup(df)
+    klasse_map = _baue_schueler_klasse_map(einteilung)
+    trennungs_paare = _baue_trennungs_set(df)
+
+    klassen_sets = [set(int(s) for s in ids) for ids in einteilung]
+
+    vorschlaege = []
+    schueler_ids = sorted(klasse_map.keys())
+
+    for i, a in enumerate(schueler_ids):
+        a_klasse_idx = klasse_map[a][0]
+        for b in schueler_ids[i + 1:]:
+            b_klasse_idx = klasse_map[b][0]
+            if a_klasse_idx == b_klasse_idx:
+                continue
+
+            klasse_a_neu = (klassen_sets[a_klasse_idx] - {a}) | {b}
+            klasse_b_neu = (klassen_sets[b_klasse_idx] - {b}) | {a}
+
+            # Trennungs-Verletzung prüfen
+            verletzt = False
+            for p, q in trennungs_paare:
+                if (p in klasse_a_neu and q in klasse_a_neu) or (p in klasse_b_neu and q in klasse_b_neu):
+                    verletzt = True
+                    break
+            if verletzt:
+                continue
+
+            # Score: für alle betroffenen Schüler (a, b, andere Klassenmitglieder bleiben gleich)
+            vorher = (
+                _zaehle_erfuellte_wuensche(a, klassen_sets[a_klasse_idx], wunsch_lookup)
+                + _zaehle_erfuellte_wuensche(b, klassen_sets[b_klasse_idx], wunsch_lookup)
+                + sum(
+                    _zaehle_erfuellte_wuensche(s, klassen_sets[a_klasse_idx], wunsch_lookup)
+                    for s in klassen_sets[a_klasse_idx] if s != a
+                )
+                + sum(
+                    _zaehle_erfuellte_wuensche(s, klassen_sets[b_klasse_idx], wunsch_lookup)
+                    for s in klassen_sets[b_klasse_idx] if s != b
+                )
+            )
+            nachher = (
+                _zaehle_erfuellte_wuensche(a, klasse_b_neu, wunsch_lookup)
+                + _zaehle_erfuellte_wuensche(b, klasse_a_neu, wunsch_lookup)
+                + sum(
+                    _zaehle_erfuellte_wuensche(s, klasse_a_neu, wunsch_lookup)
+                    for s in klasse_a_neu if s != b
+                )
+                + sum(
+                    _zaehle_erfuellte_wuensche(s, klasse_b_neu, wunsch_lookup)
+                    for s in klasse_b_neu if s != a
+                )
+            )
+            delta = nachher - vorher
+            if delta <= 0:
+                continue
+
+            def auff(sid: int) -> float:
+                return float(pd.to_numeric(df.at[sid, "Auffaelligkeit_Score"], errors="coerce") or 0)
+
+            def mig(sid: int) -> int:
+                return 1 if df.at[sid, "Migrationshintergrund / 2. Staatsangehörigkeit"] == "Ja" else 0
+
+            balance = {
+                "geschlecht_a_klasse_diff": int(
+                    (df.at[b, "Geschlecht"] == "m") - (df.at[a, "Geschlecht"] == "m")
+                ),
+                "auff_a_klasse_diff": round(auff(b) - auff(a), 2),
+                "migration_a_klasse_diff": mig(b) - mig(a),
+            }
+
+            vorschlaege.append({
+                "a": {"id": a, "name": f"{df.at[a, 'Vorname']} {df.at[a, 'Name']}", "klasse": klasse_map[a][1]},
+                "b": {"id": b, "name": f"{df.at[b, 'Vorname']} {df.at[b, 'Name']}", "klasse": klasse_map[b][1]},
+                "wuensche_gewinn": delta,
+                "balance_hinweis": balance,
+            })
+
+    vorschlaege.sort(key=lambda v: v["wuensche_gewinn"], reverse=True)
+    return vorschlaege[:limit]

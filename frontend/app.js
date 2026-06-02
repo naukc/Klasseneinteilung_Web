@@ -925,6 +925,25 @@ function renderWunschAnalyse(pruefung) {
     renderWaTausch(pruefung);
 }
 
+function renderWaKlassen(pruefung) {
+    const wunschDetails = pruefung.wunsch_details || {};
+    const rows = pruefung.klassen.map(kp => {
+        const wunschAmpelClass = `ampel-${kp.wunsch_ampel}`;
+        const mitWuenschen = Object.values(wunschDetails).filter(
+            d => d.klasse === kp.klasse_name
+        ).length;
+        return `<tr>
+            <td><strong>${kp.klasse_name}</strong></td>
+            <td>${kp.anzahl_schueler}</td>
+            <td>${mitWuenschen}</td>
+            <td class="${kp.leer_ausgegangen > 0 ? "text-red" : ""}">${kp.leer_ausgegangen}</td>
+            <td>${kp.beidseitig_zerrissen}</td>
+            <td><span class="${wunschAmpelClass}">${kp.wunsch_quote_pct}%</span></td>
+        </tr>`;
+    }).join("");
+    waKlassenTable.querySelector("tbody").innerHTML = rows;
+}
+
 
 // ==========================================================
 // Klassenlisten mit Drag & Drop

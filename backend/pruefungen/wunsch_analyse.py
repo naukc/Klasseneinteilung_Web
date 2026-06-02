@@ -246,6 +246,12 @@ def finde_tausch_vorschlaege(
 
     klassen_sets = [set(int(s) for s in ids) for ids in einteilung]
 
+    def auff(sid: int) -> float:
+        return float(pd.to_numeric(df.at[sid, "Auffaelligkeit_Score"], errors="coerce") or 0)
+
+    def mig(sid: int) -> int:
+        return 1 if df.at[sid, "Migrationshintergrund / 2. Staatsangehörigkeit"] == "Ja" else 0
+
     vorschlaege = []
     schueler_ids = sorted(klasse_map.keys())
 
@@ -296,12 +302,6 @@ def finde_tausch_vorschlaege(
             delta = nachher - vorher
             if delta <= 0:
                 continue
-
-            def auff(sid: int) -> float:
-                return float(pd.to_numeric(df.at[sid, "Auffaelligkeit_Score"], errors="coerce") or 0)
-
-            def mig(sid: int) -> int:
-                return 1 if df.at[sid, "Migrationshintergrund / 2. Staatsangehörigkeit"] == "Ja" else 0
 
             balance = {
                 "geschlecht_a_klasse_diff": int(

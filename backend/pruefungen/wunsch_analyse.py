@@ -247,7 +247,8 @@ def finde_tausch_vorschlaege(
     klassen_sets = [set(int(s) for s in ids) for ids in einteilung]
 
     def auff(sid: int) -> float:
-        return float(pd.to_numeric(df.at[sid, "Auffaelligkeit_Score"], errors="coerce") or 0)
+        wert = pd.to_numeric(df.at[sid, "Auffaelligkeit_Score"], errors="coerce")
+        return 0.0 if pd.isna(wert) else float(wert)
 
     def mig(sid: int) -> int:
         return 1 if df.at[sid, "Migrationshintergrund / 2. Staatsangehörigkeit"] == "Ja" else 0

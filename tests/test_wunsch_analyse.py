@@ -130,3 +130,61 @@ def test_schueler_ohne_wuensche_nicht_im_dict():
     details = berechne_schueler_wunsch_details(df, einteilung)
     assert 1 in details
     assert 2 not in details
+
+
+from backend.pruefungen.wunsch_analyse import finde_zerrissene_cluster
+
+
+def test_cluster_dreier_gruppe_zerrissen():
+    """A ↔ B ↔ C: drei Knoten, zwei beidseitige Paare, auf 2 Klassen verteilt."""
+    df = _baue_df(
+        [
+            {"vorname": "A", "name": "X"},
+            {"vorname": "B", "name": "X"},
+            {"vorname": "C", "name": "X"},
+        ],
+        wunsch_listen=[[2], [1, 3], [2]],
+    )
+    einteilung = [[1], [2, 3]]
+    cluster = finde_zerrissene_cluster(df, einteilung)
+    assert len(cluster) == 1
+    c = cluster[0]
+    assert set(s["id"] for s in c["schueler"]) == {1, 2, 3}
+
+
+def test_cluster_keine_wenn_alle_in_einer_klasse():
+    """Selbe Wunsch-Beziehungen, aber alle in einer Klasse → kein Cluster."""
+    df = _baue_df(
+        [
+            {"vorname": "A", "name": "X"},
+            {"vorname": "B", "name": "X"},
+            {"vorname": "C", "name": "X"},
+        ],
+        wunsch_listen=[[2], [1, 3], [2]],
+    )
+    einteilung = [[1, 2, 3]]
+    assert finde_zerrissene_cluster(df, einteilung) == []
+
+
+def test_cluster_zu_klein_wird_nicht_aufgenommen():
+    """Nur 2 Schüler: kein Cluster (Mindestgröße 3)."""
+    df = _baue_df(
+        [{"vorname": "A", "name": "X"}, {"vorname": "B", "name": "X"}],
+        wunsch_listen=[[2], [1]],
+    )
+    einteilung = [[1], [2]]
+    assert finde_zerrissene_cluster(df, einteilung) == []
+
+
+def test_cluster_braucht_zwei_beidseitige_paare():
+    """3 Schüler, A↔B + C einseitig → nur 1 gegenseitiges Paar → kein Cluster."""
+    df = _baue_df(
+        [
+            {"vorname": "A", "name": "X"},
+            {"vorname": "B", "name": "X"},
+            {"vorname": "C", "name": "X"},
+        ],
+        wunsch_listen=[[2], [1, 3], []],   # A↔B beidseitig, B→C einseitig
+    )
+    einteilung = [[1], [2], [3]]
+    assert finde_zerrissene_cluster(df, einteilung) == []

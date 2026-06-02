@@ -999,6 +999,30 @@ waFilterBeidseitig.addEventListener("change", () => {
     if (_wunschAnalyseDaten) renderWaSchueler(_wunschAnalyseDaten);
 });
 
+// ==========================================================
+// Wunsch-Analyse: Cluster-Ansicht
+// ==========================================================
+
+function renderWaCluster(pruefung) {
+    const cluster = pruefung.wunsch_cluster || [];
+    if (cluster.length === 0) {
+        waClusterSection.classList.add("hidden");
+        return;
+    }
+    waClusterSection.classList.remove("hidden");
+
+    waClusterList.innerHTML = cluster.map(c => {
+        const schuelerHtml = c.schueler.map(
+            s => `<span class="wa-cluster-schueler">${s.name} <strong>(${s.klasse})</strong></span>`
+        ).join(" · ");
+        const klassen = [...new Set(c.schueler.map(s => s.klasse))].sort();
+        return `<div class="wa-cluster">
+            <div class="wa-cluster-header">Cluster auf ${klassen.join(" / ")} verteilt — ${c.schueler.length} Schüler, ${c.beidseitige_paare.length} gegenseitige Wünsche</div>
+            <div class="wa-cluster-body">${schuelerHtml}</div>
+        </div>`;
+    }).join("");
+}
+
 
 // ==========================================================
 // Klassenlisten mit Drag & Drop

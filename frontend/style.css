@@ -1315,6 +1315,68 @@ tr.validierung-fehler td {
     margin-top: 8px;
 }
 
+/* Schüler-hinzufügen Modal */
+.schueler-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.schueler-modal-grid .config-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+}
+
+.schueler-modal-grid select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.modal-content .hint {
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Entfernen-Button in der Schülerliste */
+.col-aktion {
+    width: 36px;
+    text-align: center;
+}
+
+.btn-row-delete {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-row-delete:hover {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+/* Hervorhebung frisch hinzugefügter Schüler */
+@keyframes schuelerNeuPulse {
+    0% { background: var(--bg-hover); }
+    100% { background: transparent; }
+}
+
+.schueler-neu-highlight td {
+    animation: schuelerNeuPulse 2.5s ease-out;
+}
+
 /* Modal Actions and Buttons */
 .modal-actions {
     margin-top: 20px;

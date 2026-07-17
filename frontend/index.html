@@ -113,6 +113,9 @@
                     <p class="subtitle">Wünsche und Trennungen zuordnen (optional)</p>
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" id="addSchuelerBtn" title="Neuen Schüler zur Liste hinzufügen">
+                        <span class="icon">＋</span> Schüler hinzufügen
+                    </button>
                     <button class="btn btn-secondary" id="exportSchuelerlisteBtn" title="Aktuelle Liste inkl. Wünsche/Trennungen als Excel sichern">
                         <span class="icon">💾</span> Liste als Excel
                     </button>
@@ -134,6 +137,7 @@
                             <th class="col-allergie">Hund-Allergie</th>
                             <th class="col-wuensche">Wunschpartner</th>
                             <th class="col-trennung">Trennen von (max. 4)</th>
+                            <th class="col-aktion"></th>
                         </tr>
                     </thead>
                     <tbody id="schuelerEditBody"></tbody>
@@ -252,6 +256,68 @@
             <div class="modal-actions" style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
                 <button class="btn btn-secondary" id="cancelSaveBtn">Abbrechen</button>
                 <button class="btn btn-success" id="confirmSaveBtn">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schüler-hinzufügen Modal -->
+    <div class="modal hidden" id="schuelerModal">
+        <div class="modal-content card">
+            <h3>Schüler hinzufügen</h3>
+            <div class="schueler-modal-grid">
+                <div class="config-group">
+                    <label for="neuVorname">Vorname:</label>
+                    <input type="text" id="neuVorname" placeholder="z.B. Max">
+                </div>
+                <div class="config-group">
+                    <label for="neuName">Nachname:</label>
+                    <input type="text" id="neuName" placeholder="z.B. Mustermann">
+                </div>
+                <div class="config-group">
+                    <label for="neuGeschlecht">Geschlecht:</label>
+                    <select id="neuGeschlecht">
+                        <option value="w">W</option>
+                        <option value="m">M</option>
+                    </select>
+                </div>
+                <div class="config-group">
+                    <label for="neuAuff">Auffälligkeit:</label>
+                    <select id="neuAuff">
+                        <option value="0" selected>–</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="5">5</option>
+                        <option value="8">8</option>
+                        <option value="13">13</option>
+                        <option value="21">21</option>
+                    </select>
+                </div>
+                <div class="config-group">
+                    <label for="neuMigration">Migration:</label>
+                    <select id="neuMigration">
+                        <option value="" selected>–</option>
+                        <option value="Ja">Ja</option>
+                        <option value="Nein">Nein</option>
+                    </select>
+                </div>
+                <div class="config-group">
+                    <label for="neuSprengel">Sprengel:</label>
+                    <input type="text" id="neuSprengel" placeholder="optional">
+                </div>
+                <div class="config-group">
+                    <label for="neuAllergie">Hund-Allergie:</label>
+                    <select id="neuAllergie">
+                        <option value="" selected>?</option>
+                        <option value="nein">nein</option>
+                        <option value="ja">ja</option>
+                    </select>
+                </div>
+            </div>
+            <p class="hint">Wünsche und Trennungen können nach dem Hinzufügen direkt in der Tabelle zugeordnet werden.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelSchuelerBtn">Abbrechen</button>
+                <button class="btn btn-success" id="confirmSchuelerBtn">Hinzufügen</button>
             </div>
         </div>
     </div>

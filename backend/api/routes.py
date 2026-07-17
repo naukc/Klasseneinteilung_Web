@@ -6,6 +6,8 @@ Endpunkte:
 - POST /api/upload              → Datei hochladen + Spalten analysieren
 - POST /api/mapping-bestaetigen → Spalten-Mapping bestätigen, DataFrame aufbauen
 - GET  /api/schueler            → Schülerliste abrufen (mit Wünschen/Trennungen)
+- POST /api/schueler            → Neuen Schüler hinzufügen
+- DELETE /api/schueler/{id}     → Schüler entfernen
 - POST /api/wuensche-speichern  → Wünsche und Trennungen speichern
 - POST /api/optimierung         → Einteilung starten
 - POST /api/verschieben         → Manuelle Verschiebung
@@ -93,6 +95,17 @@ class WunschZuordnung(BaseModel):
 
 class WuenscheSpeichern(BaseModel):
     zuordnungen: list[WunschZuordnung]
+
+
+class SchuelerNeu(BaseModel):
+    """Neuer Schüler aus dem Editor."""
+    vorname: str
+    name: str
+    geschlecht: str
+    auffaelligkeit: int = 0
+    migration: str = ""
+    sprengel: str = ""
+    hundehaarallergie: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +511,132 @@ def hole_schueler():
         "status": "ok",
         "schueler": _schueler_liste_aus_df(_state["df"]),
         "anzahl_schueler": len(_state["df"]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Schüler hinzufügen / entfernen
+# ---------------------------------------------------------------------------
+
+@router.post("/schueler")
+def schueler_hinzufuegen(body: SchuelerNeu):
+    """
+    Fügt einen neuen Schüler zum geladenen Datensatz hinzu.
+    Die ID wird automatisch vergeben (höchste bestehende ID + 1).
+    Eine bestehende Einteilung wird verworfen — sie wäre unvollständig.
+    """
+    if _state["df"] is None:
+        raise HTTPException(status_code=400, detail="Keine Daten geladen.")
+
+    from backend.vorlage import ERLAUBTE_AUFFAELLIGKEIT, ERLAUBTE_GESCHLECHT, ERLAUBTE_MIGRATION
+    from backend.schulhund import SPALTE as SCHULHUND_SPALTE, normalisiere_allergie_wert
+
+    vorname = body.vorname.strip()
+    name = body.name.strip()
+    if not vorname or not name:
+        raise HTTPException(status_code=400, detail="Vorname und Name dürfen nicht leer sein.")
+
+    geschlecht = body.geschlecht.lower().strip()
+    if geschlecht not in ERLAUBTE_GESCHLECHT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ungültiges Geschlecht '{body.geschlecht}'. Erlaubt: {', '.join(ERLAUBTE_GESCHLECHT)}.",
+        )
+
+    if body.auffaelligkeit != 0 and body.auffaelligkeit not in ERLAUBTE_AUFFAELLIGKEIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ungültiger Auffälligkeits-Score {body.auffaelligkeit}. "
+                   f"Erlaubt: {', '.join(str(x) for x in ERLAUBTE_AUFFAELLIGKEIT)} oder 0.",
+        )
+
+    migration = body.migration.strip()
+    if migration and migration not in ERLAUBTE_MIGRATION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ungültiger Migrations-Wert '{body.migration}'. Erlaubt: {', '.join(ERLAUBTE_MIGRATION)}.",
+        )
+
+    df = _state["df"]
+
+    # Optionale Spalten bei Bedarf anlegen
+    sprengel = body.sprengel.strip()
+    if sprengel and "Sprengel" not in df.columns:
+        df["Sprengel"] = ""
+    if body.hundehaarallergie.strip() and SCHULHUND_SPALTE not in df.columns:
+        df[SCHULHUND_SPALTE] = ""
+
+    neue_id = int(df.index.max()) + 1 if len(df) > 0 else 1
+
+    # Defaults für alle vorhandenen Spalten, dann Eingaben übernehmen
+    zeile = {}
+    for spalte in df.columns:
+        s = str(spalte)
+        if s.startswith("Wunsch_") or s.startswith("Trennen_Von") or s == "Auffaelligkeit_Score":
+            zeile[spalte] = 0
+        else:
+            zeile[spalte] = ""
+
+    zeile["Vorname"] = vorname
+    zeile["Name"] = name
+    zeile["Geschlecht"] = geschlecht
+    zeile["Auffaelligkeit_Score"] = body.auffaelligkeit
+    mig_spalte = "Migrationshintergrund / 2. Staatsangehörigkeit"
+    if mig_spalte in zeile:
+        zeile[mig_spalte] = migration
+    if "Sprengel" in zeile and sprengel:
+        zeile["Sprengel"] = sprengel
+    if SCHULHUND_SPALTE in zeile:
+        zeile[SCHULHUND_SPALTE] = normalisiere_allergie_wert(body.hundehaarallergie)
+
+    df.loc[neue_id] = pd.Series(zeile)
+
+    # Bestehende Einteilung ist mit dem neuen Schüler unvollständig → verwerfen
+    _state["einteilung"] = None
+    _state["pruefung"] = None
+
+    return {
+        "status": "ok",
+        "schueler_id": neue_id,
+        "anzahl_schueler": len(df),
+        "schueler": _schueler_liste_aus_df(df),
+        "validierung": validiere_dataframe(df),
+    }
+
+
+@router.delete("/schueler/{schueler_id}")
+def schueler_entfernen(schueler_id: int):
+    """
+    Entfernt einen Schüler aus dem Datensatz.
+    Wünsche/Trennungen anderer Schüler, die auf ihn zeigen, werden bereinigt.
+    Eine bestehende Einteilung wird verworfen.
+    """
+    if _state["df"] is None:
+        raise HTTPException(status_code=400, detail="Keine Daten geladen.")
+
+    df = _state["df"]
+    if schueler_id not in df.index:
+        raise HTTPException(status_code=404, detail=f"Schüler-ID {schueler_id} nicht gefunden.")
+
+    df = df.drop(index=schueler_id)
+
+    # Referenzen auf den entfernten Schüler in Wunsch-/Trennungsspalten löschen
+    for spalte in df.columns:
+        s = str(spalte)
+        if s.startswith("Wunsch_") or s.startswith("Trennen_Von"):
+            df[spalte] = df[spalte].apply(
+                lambda v: 0 if _safe_int(v) == schueler_id else v
+            )
+
+    _state["df"] = df
+    _state["einteilung"] = None
+    _state["pruefung"] = None
+
+    return {
+        "status": "ok",
+        "anzahl_schueler": len(df),
+        "schueler": _schueler_liste_aus_df(df),
+        "validierung": validiere_dataframe(df),
     }
 
 

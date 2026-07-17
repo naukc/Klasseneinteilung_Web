@@ -104,6 +104,10 @@ const schuelerAnzahlBadge = document.getElementById("schuelerAnzahlBadge");
 const confirmDataBtn = document.getElementById("confirmDataBtn");
 const exportSchuelerlisteBtn = document.getElementById("exportSchuelerlisteBtn");
 const schulhundKlasse = document.getElementById("schulhundKlasse");
+const addSchuelerBtn = document.getElementById("addSchuelerBtn");
+const schuelerModal = document.getElementById("schuelerModal");
+const cancelSchuelerBtn = document.getElementById("cancelSchuelerBtn");
+const confirmSchuelerBtn = document.getElementById("confirmSchuelerBtn");
 
 function aktualisiereSchulhundDropdown() {
     const anzahl = parseInt(anzahlKlassen.value, 10) || 0;
@@ -357,6 +361,9 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
             <td class="col-trennung">
                 <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="trennung" data-max="4"></div>
             </td>
+            <td class="col-aktion">
+                <button type="button" class="btn-row-delete" data-schueler-id="${s.id}" title="Schüler entfernen">✕</button>
+            </td>
         `;
         schuelerEditBody.appendChild(tr);
 
@@ -364,7 +371,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
         if (hatHinweise) {
             const hinweisTr = document.createElement("tr");
             hinweisTr.className = "validierung-hinweis-row";
-            hinweisTr.innerHTML = `<td colspan="9">${hinweiseMap[s.id].map(h =>
+            hinweisTr.innerHTML = `<td colspan="10">${hinweiseMap[s.id].map(h =>
                 `<div class="validierung-hinweis-item">⚠ <strong>${h.spalte}</strong>: ${h.hinweis}</div>`
             ).join("")}</td>`;
             schuelerEditBody.appendChild(hinweisTr);
@@ -659,6 +666,133 @@ exportSchuelerlisteBtn.addEventListener("click", async () => {
             exportSchuelerlisteBtn.innerHTML = origLabel;
             exportSchuelerlisteBtn.disabled = false;
         }, 1500);
+    }
+});
+
+
+// ==========================================================
+// Schüler hinzufügen / entfernen
+// ==========================================================
+
+// Nach Änderungen am Datensatz ist eine bestehende Einteilung ungültig —
+// Backend verwirft sie, hier die zugehörige Ansicht ausblenden.
+function verwerfeEinteilungsAnsicht() {
+    currentData = null;
+    dashboard.classList.add("hidden");
+    ampelBanner.classList.add("hidden");
+    klassenSection.classList.add("hidden");
+    exportBtn.disabled = true;
+    entferneTrennungsWarnung();
+    entferneTrennungsInfo();
+}
+
+addSchuelerBtn.addEventListener("click", () => {
+    document.getElementById("neuVorname").value = "";
+    document.getElementById("neuName").value = "";
+    document.getElementById("neuGeschlecht").value = "w";
+    document.getElementById("neuAuff").value = "0";
+    document.getElementById("neuMigration").value = "";
+    document.getElementById("neuSprengel").value = "";
+    document.getElementById("neuAllergie").value = "";
+    schuelerModal.classList.remove("hidden");
+    setTimeout(() => document.getElementById("neuVorname").focus(), 50);
+});
+
+cancelSchuelerBtn.addEventListener("click", () => {
+    schuelerModal.classList.add("hidden");
+});
+
+confirmSchuelerBtn.addEventListener("click", async () => {
+    const vorname = document.getElementById("neuVorname").value.trim();
+    const name = document.getElementById("neuName").value.trim();
+
+    if (!vorname || !name) {
+        alert("Bitte Vorname und Nachname eingeben.");
+        return;
+    }
+
+    try {
+        confirmSchuelerBtn.disabled = true;
+        confirmSchuelerBtn.textContent = "Füge hinzu…";
+
+        // Aktuelle Editor-Eingaben sichern, damit sie beim Neu-Rendern nicht verloren gehen
+        await autoSpeichereEditor();
+
+        const res = await fetch(`${API}/schueler`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                vorname,
+                name,
+                geschlecht: document.getElementById("neuGeschlecht").value,
+                auffaelligkeit: parseInt(document.getElementById("neuAuff").value) || 0,
+                migration: document.getElementById("neuMigration").value,
+                sprengel: document.getElementById("neuSprengel").value.trim(),
+                hundehaarallergie: document.getElementById("neuAllergie").value,
+            }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Hinzufügen fehlgeschlagen");
+        }
+        const data = await res.json();
+
+        schuelerModal.classList.add("hidden");
+        verwerfeEinteilungsAnsicht();
+
+        schuelerListe = data.schueler || [];
+        zeigeSchuelerEditor(schuelerListe, data.validierung || []);
+
+        // Neue Zeile ins Bild scrollen und kurz hervorheben
+        const neueZeile = schuelerEditBody.querySelector(`tr[data-schueler-id="${data.schueler_id}"]`);
+        if (neueZeile) {
+            neueZeile.scrollIntoView({ behavior: "smooth", block: "center" });
+            neueZeile.classList.add("schueler-neu-highlight");
+            setTimeout(() => neueZeile.classList.remove("schueler-neu-highlight"), 2500);
+        }
+
+    } catch (err) {
+        alert("Fehler: " + err.message);
+    } finally {
+        confirmSchuelerBtn.disabled = false;
+        confirmSchuelerBtn.textContent = "Hinzufügen";
+    }
+});
+
+// Entfernen-Buttons per Event-Delegation (Zeilen werden dynamisch gerendert)
+schuelerEditBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".btn-row-delete");
+    if (!btn) return;
+
+    const sid = parseInt(btn.dataset.schuelerId);
+    const s = schuelerListe.find(x => x.id === sid);
+    const label = s ? `${s.vorname} ${s.name}` : `#${sid}`;
+
+    if (!confirm(`Schüler "${label}" wirklich aus der Liste entfernen?\n\nWünsche und Trennungen anderer Schüler, die auf ihn verweisen, werden ebenfalls entfernt.`)) {
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+
+        // Aktuelle Editor-Eingaben sichern, damit sie beim Neu-Rendern nicht verloren gehen
+        await autoSpeichereEditor();
+
+        const res = await fetch(`${API}/schueler/${sid}`, { method: "DELETE" });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Entfernen fehlgeschlagen");
+        }
+        const data = await res.json();
+
+        verwerfeEinteilungsAnsicht();
+
+        schuelerListe = data.schueler || [];
+        zeigeSchuelerEditor(schuelerListe, data.validierung || []);
+
+    } catch (err) {
+        alert("Fehler: " + err.message);
+        btn.disabled = false;
     }
 });
 

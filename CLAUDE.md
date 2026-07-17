@@ -31,8 +31,12 @@ pyinstaller klasseneinteilung.spec --clean --noconfirm   # manuell
 ```
 Output: `dist/Klasseneinteilung/`. Auf macOS macht `build.sh` zusätzlich `xattr -cr` + Ad-hoc `codesign` gegen Gatekeeper-Probleme.
 
-### Integration-Test
-Es gibt **keine Unit-Test-Suite** im Web-Repo. `test_persistence.py` ist ein End-to-End-Test gegen einen laufenden Server:
+### Tests
+Unit-Tests liegen unter `tests/` und laufen ohne Server:
+```bash
+python -m pytest tests/
+```
+`test_persistence.py` (im Repo-Root) ist ein End-to-End-Test gegen einen laufenden Server:
 ```bash
 # In einem Terminal:
 uvicorn backend.app:app --port 8000

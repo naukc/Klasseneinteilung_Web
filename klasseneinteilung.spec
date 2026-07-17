@@ -30,6 +30,7 @@ a = Analysis(
         "backend.pfade",
         "backend.pruefungen",
         "backend.pruefungen.qualitaet",
+        "backend.pruefungen.wunsch_analyse",
         "backend.optimierung_wrapper",
         "backend.spaltenmapping",
         "backend.vorlage",

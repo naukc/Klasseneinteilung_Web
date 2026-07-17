@@ -69,9 +69,11 @@ a = Analysis(
         "odf.text",
         "odf.style",
         "odf.office",
+        # Multipart (für File-Upload; python-multipart heißt ab 0.0.12
+        # kanonisch python_multipart, der Alt-Name multipart entfällt künftig)
         "multipart",
-        # Multipart (für File-Upload)
         "multipart.multipart",
+        "python_multipart",
         # Encoding
         "encodings",
         "encodings.idna",

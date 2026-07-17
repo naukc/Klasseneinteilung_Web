@@ -132,7 +132,7 @@
                             <th class="col-migration">Migration</th>
                             <th class="col-sprengel">Sprengel</th>
                             <th class="col-allergie">Hund-Allergie</th>
-                            <th class="col-wuensche">Wunschpartner (max. 4)</th>
+                            <th class="col-wuensche">Wunschpartner</th>
                             <th class="col-trennung">Trennen von (max. 4)</th>
                         </tr>
                     </thead>
@@ -174,21 +174,62 @@
                 </div>
             </div>
 
-            <!-- Nicht erfüllte Wünsche -->
-            <div class="card" id="wuenscheCard">
-                <h3>Nicht erfüllte Wünsche <span class="badge" id="wuenscheBadge"></span></h3>
-                <div class="table-wrapper">
-                    <table class="wuensche-table" id="wuenscheTable">
-                        <thead>
-                            <tr>
-                                <th>Schüler</th>
-                                <th>Klasse</th>
-                                <th>Wunschpartner</th>
-                                <th>Klasse Wunschpartner</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+            <!-- Wunsch-Analyse -->
+            <div class="card hidden" id="wunschAnalyseCard">
+                <h3>Wunsch-Analyse <span class="badge" id="wunschAnalyseBadge"></span></h3>
+
+                <!-- Sektion 1: Aggregation pro Klasse -->
+                <div class="wa-section">
+                    <h4>Pro Klasse</h4>
+                    <div class="table-wrapper">
+                        <table class="wa-klassen-table" id="waKlassenTable">
+                            <thead>
+                                <tr>
+                                    <th>Klasse</th>
+                                    <th>SuS</th>
+                                    <th>Mit Wünschen</th>
+                                    <th>Leer ausgegangen</th>
+                                    <th>↔ Zerrissen</th>
+                                    <th>Wunsch-Quote</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sektion 2: Pro Schüler -->
+                <div class="wa-section">
+                    <h4>Pro Schüler <span class="hint">(↔ beidseitig · → einseitig · ✓ erfüllt · ✗ offen)</span></h4>
+                    <div class="wa-filter">
+                        <label><input type="checkbox" id="waFilterLeer"> Nur leer Ausgegangene</label>
+                        <label><input type="checkbox" id="waFilterBeidseitig"> Nur beidseitige offen</label>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="wa-schueler-table" id="waSchuelerTable">
+                            <thead>
+                                <tr>
+                                    <th>Schüler</th>
+                                    <th>Klasse</th>
+                                    <th>Erfüllt</th>
+                                    <th>Wünsche</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sektion 3: Zerrissene Cluster -->
+                <div class="wa-section hidden" id="waClusterSection">
+                    <h4>Zerrissene Wunsch-Cluster</h4>
+                    <div id="waClusterList"></div>
+                </div>
+
+                <!-- Sektion 4: Tausch-Vorschläge -->
+                <div class="wa-section hidden" id="waTauschSection">
+                    <h4>Tausch-Vorschläge (Top 10)</h4>
+                    <div id="waTauschList"></div>
                 </div>
             </div>
         </section>

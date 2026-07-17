@@ -18,6 +18,13 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
 
+from backend.pruefungen.wunsch_analyse import (
+    berechne_schueler_wunsch_details,
+    finde_zerrissene_cluster,
+    finde_tausch_vorschlaege,
+    baue_wunsch_lookup,
+)
+
 
 # ---------------------------------------------------------------------------
 # Schwellenwerte für die Ampel-Bewertung
@@ -108,6 +115,10 @@ class KlassenPruefung:
     # Nicht erfüllte Wünsche im Detail
     nicht_erfuellte_wuensche: list = field(default_factory=list)
 
+    # Erweiterte Wunsch-Analyse
+    leer_ausgegangen: int = 0
+    beidseitig_zerrissen: int = 0
+
 
 @dataclass
 class GesamtPruefung:
@@ -116,6 +127,9 @@ class GesamtPruefung:
     gesamt_ampel: str = "gruen"  # schlechteste Ampel über alle Kriterien
     zusammenfassung: dict = field(default_factory=dict)
     schulhund_klasse_index: int | None = None
+    wunsch_details: dict = field(default_factory=dict)
+    wunsch_cluster: list = field(default_factory=list)
+    tausch_vorschlaege: list = field(default_factory=list)
 
 
 def _get_class_name(index: int) -> str:
@@ -369,9 +383,38 @@ def pruefe_einteilung(
         "hat_sprengel": any(kp.hat_sprengel for kp in klassen_pruefungen),
     }
 
+    # --- Erweiterte Wunsch-Analyse ---
+    wunsch_details = berechne_schueler_wunsch_details(df, einteilung)
+    wunsch_cluster = finde_zerrissene_cluster(df, einteilung)
+    tausch_vorschlaege = finde_tausch_vorschlaege(df, einteilung)
+
+    # Pro-Klasse-Aggregation: leer_ausgegangen + beidseitig_zerrissen
+    wunsch_lookup = baue_wunsch_lookup(df)
+    klasse_map = {int(s): i for i, ids in enumerate(einteilung) for s in ids}
+    for i, kp in enumerate(klassen_pruefungen):
+        klasse_set = set(int(s) for s in einteilung[i])
+        kp.leer_ausgegangen = sum(
+            1
+            for sid in klasse_set
+            if sid in wunsch_details and wunsch_details[sid]["leer_ausgegangen"]
+        )
+        kp.beidseitig_zerrissen = sum(
+            1
+            for sid in klasse_set
+            for partner_id in wunsch_lookup.get(sid, set())
+            if (
+                sid < partner_id
+                and sid in wunsch_lookup.get(partner_id, set())
+                and klasse_map.get(partner_id) != i
+            )
+        )
+
     return GesamtPruefung(
         klassen=klassen_pruefungen,
         gesamt_ampel=gesamt_ampel,
         zusammenfassung=zusammenfassung,
         schulhund_klasse_index=schulhund_klasse,
+        wunsch_details=wunsch_details,
+        wunsch_cluster=wunsch_cluster,
+        tausch_vorschlaege=tausch_vorschlaege,
     )

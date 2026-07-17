@@ -54,6 +54,7 @@ const ERLAUBTE_MIGRATION = ["Ja", "Nein"];
 // --- App-State ---
 let currentData = null;
 let schuelerListe = [];   // Aktuelle Schülerliste aus dem Backend
+let _wunschAnalyseDaten = null;  // wird in renderWunschAnalyse gesetzt, von Sub-Renderern gelesen
 
 // --- DOM-Elemente ---
 const fileInput = document.getElementById("fileInput");
@@ -80,9 +81,16 @@ const ampelText = document.getElementById("ampelText");
 const dashboard = document.getElementById("dashboard");
 const summaryCards = document.getElementById("summaryCards");
 const pruefungTable = document.getElementById("pruefungTable");
-const wuenscheCard = document.getElementById("wuenscheCard");
-const wuenscheBadge = document.getElementById("wuenscheBadge");
-const wuenscheTable = document.getElementById("wuenscheTable");
+const wunschAnalyseCard = document.getElementById("wunschAnalyseCard");
+const wunschAnalyseBadge = document.getElementById("wunschAnalyseBadge");
+const waKlassenTable = document.getElementById("waKlassenTable");
+const waSchuelerTable = document.getElementById("waSchuelerTable");
+const waClusterSection = document.getElementById("waClusterSection");
+const waClusterList = document.getElementById("waClusterList");
+const waTauschSection = document.getElementById("waTauschSection");
+const waTauschList = document.getElementById("waTauschList");
+const waFilterLeer = document.getElementById("waFilterLeer");
+const waFilterBeidseitig = document.getElementById("waFilterBeidseitig");
 const klassenSection = document.getElementById("klassenSection");
 const klassenGrid = document.getElementById("klassenGrid");
 
@@ -344,7 +352,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
             <td class="col-sprengel">${sprengelWert ? `<span class="sprengel-tag">${sprengelWert}</span>` : '<span class="text-muted">–</span>'}</td>
             <td class="col-allergie">${allergieSelect}</td>
             <td class="col-wuensche">
-                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche" data-max="4"></div>
+                <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="wuensche"></div>
             </td>
             <td class="col-trennung">
                 <div class="autocomplete-container" data-schueler-id="${s.id}" data-type="trennung" data-max="4"></div>
@@ -367,7 +375,7 @@ function zeigeSchuelerEditor(schueler, validierung = []) {
     document.querySelectorAll(".autocomplete-container").forEach(container => {
         const sid = parseInt(container.dataset.schuelerId);
         const type = container.dataset.type;
-        const max = parseInt(container.dataset.max);
+        const max = parseInt(container.dataset.max) || Infinity;
 
         const s = schueler.find(x => x.id === sid);
         const vorauswahl = type === "wuensche" ? (s.wuensche || []) : (s.trennen_von || []);
@@ -773,7 +781,7 @@ function renderAlles(data) {
     renderAmpel(data.pruefung);
     renderSummary(data.pruefung);
     renderPruefungTabelle(data.pruefung);
-    renderWuensche(data.pruefung);
+    renderWunschAnalyse(data.pruefung);
     renderKlassen(data.klassen, data.pruefung);
 
     dashboard.classList.remove("hidden");
@@ -894,22 +902,173 @@ function renderPruefungTabelle(pruefung) {
     }).join("");
 }
 
-function renderWuensche(pruefung) {
-    const alleWuensche = pruefung.klassen.flatMap(kp => kp.nicht_erfuellte_wuensche);
+function renderWunschAnalyse(pruefung) {
+    _wunschAnalyseDaten = pruefung;
+    const wunschDetails = pruefung.wunsch_details || {};
+    const hatDaten = Object.keys(wunschDetails).length > 0;
 
-    if (alleWuensche.length > 0) {
-        wuenscheCard.classList.remove("hidden");
-        wuenscheBadge.textContent = alleWuensche.length;
-
-        wuenscheTable.querySelector("tbody").innerHTML = alleWuensche.map(w => `<tr>
-            <td>${w.schueler_name} <span style="color:var(--text-muted)">(${w.schueler_id})</span></td>
-            <td><strong>${w.klasse}</strong></td>
-            <td>${w.wunsch_name} <span style="color:var(--text-muted)">(${w.wunsch_id})</span></td>
-            <td><strong>${w.wunsch_klasse || "?"}</strong></td>
-        </tr>`).join("");
-    } else {
-        wuenscheCard.classList.add("hidden");
+    if (!hatDaten) {
+        wunschAnalyseCard.classList.add("hidden");
+        return;
     }
+    wunschAnalyseCard.classList.remove("hidden");
+
+    const offene = Object.values(wunschDetails).reduce(
+        (acc, d) => acc + (d.wuensche_gesamt - d.wuensche_erfuellt),
+        0
+    );
+    wunschAnalyseBadge.textContent = offene;
+
+    renderWaKlassen(pruefung);
+    renderWaSchueler(pruefung);
+    renderWaCluster(pruefung);
+    renderWaTausch(pruefung);
+}
+
+function renderWaKlassen(pruefung) {
+    const wunschDetails = pruefung.wunsch_details || {};
+    const rows = pruefung.klassen.map(kp => {
+        const wunschAmpelClass = `ampel-${kp.wunsch_ampel}`;
+        const mitWuenschen = Object.values(wunschDetails).filter(
+            d => d.klasse === kp.klasse_name
+        ).length;
+        return `<tr>
+            <td><strong>${kp.klasse_name}</strong></td>
+            <td>${kp.anzahl_schueler}</td>
+            <td>${mitWuenschen}</td>
+            <td class="${kp.leer_ausgegangen > 0 ? "text-red" : ""}">${kp.leer_ausgegangen}</td>
+            <td>${kp.beidseitig_zerrissen}</td>
+            <td><span class="${wunschAmpelClass}">${kp.wunsch_quote_pct}%</span></td>
+        </tr>`;
+    }).join("");
+    waKlassenTable.querySelector("tbody").innerHTML = rows;
+}
+
+function renderWaSchueler(pruefung) {
+    const wunschDetails = pruefung.wunsch_details || {};
+    const details = Object.entries(wunschDetails).map(([sid, d]) => ({
+        id: parseInt(sid),
+        ...d,
+    }));
+
+    const filterLeer = waFilterLeer.checked;
+    const filterBeid = waFilterBeidseitig.checked;
+
+    let gefiltert = details;
+    if (filterLeer) gefiltert = gefiltert.filter(d => d.leer_ausgegangen);
+    if (filterBeid) gefiltert = gefiltert.filter(
+        d => d.wuensche.some(w => w.ist_beidseitig && !w.ist_erfuellt)
+    );
+
+    // Sortierung: leer_ausgegangen zuerst, dann nach Anzahl unerfüllter Wünsche absteigend
+    gefiltert.sort((a, b) => {
+        if (a.leer_ausgegangen !== b.leer_ausgegangen) return a.leer_ausgegangen ? -1 : 1;
+        const offenA = a.wuensche_gesamt - a.wuensche_erfuellt;
+        const offenB = b.wuensche_gesamt - b.wuensche_erfuellt;
+        if (offenA !== offenB) return offenB - offenA;
+        return a.schueler_name.localeCompare(b.schueler_name);
+    });
+
+    const rows = gefiltert.map(d => {
+        const chips = d.wuensche.map(w => {
+            const sym = w.ist_beidseitig ? "↔" : "→";
+            const check = w.ist_erfuellt ? "✓" : "✗";
+            const cls = w.ist_erfuellt ? "wa-chip wa-chip-erfuellt" : "wa-chip wa-chip-offen";
+            return `<span class="${cls}">${sym} ${w.wunsch_name} (${w.wunsch_klasse}) ${check}</span>`;
+        }).join(" ");
+
+        const quoteHtml = d.leer_ausgegangen
+            ? `<strong class="text-red">${d.wuensche_erfuellt}/${d.wuensche_gesamt}</strong>`
+            : `${d.wuensche_erfuellt}/${d.wuensche_gesamt}`;
+
+        return `<tr>
+            <td>${d.schueler_name} <span class="muted">(${d.id})</span></td>
+            <td><strong>${d.klasse}</strong></td>
+            <td>${quoteHtml}</td>
+            <td>${chips}</td>
+        </tr>`;
+    }).join("");
+
+    waSchuelerTable.querySelector("tbody").innerHTML = rows;
+}
+
+waFilterLeer.addEventListener("change", () => {
+    if (_wunschAnalyseDaten) renderWaSchueler(_wunschAnalyseDaten);
+});
+waFilterBeidseitig.addEventListener("change", () => {
+    if (_wunschAnalyseDaten) renderWaSchueler(_wunschAnalyseDaten);
+});
+
+// ==========================================================
+// Wunsch-Analyse: Cluster-Ansicht
+// ==========================================================
+
+function renderWaCluster(pruefung) {
+    const cluster = pruefung.wunsch_cluster || [];
+    if (cluster.length === 0) {
+        waClusterSection.classList.add("hidden");
+        return;
+    }
+    waClusterSection.classList.remove("hidden");
+
+    waClusterList.innerHTML = cluster.map(c => {
+        const schuelerHtml = c.schueler.map(
+            s => `<span class="wa-cluster-schueler">${s.name} <strong>(${s.klasse})</strong></span>`
+        ).join(" · ");
+        const klassen = [...new Set(c.schueler.map(s => s.klasse))].sort();
+        return `<div class="wa-cluster">
+            <div class="wa-cluster-header">Cluster auf ${klassen.join(" / ")} verteilt — ${c.schueler.length} Schüler, ${c.beidseitige_paare.length} gegenseitige Wünsche</div>
+            <div class="wa-cluster-body">${schuelerHtml}</div>
+        </div>`;
+    }).join("");
+}
+
+// ==========================================================
+// Wunsch-Analyse: Tausch-Vorschläge
+// ==========================================================
+
+function renderWaTausch(pruefung) {
+    const vorschlaege = pruefung.tausch_vorschlaege || [];
+    if (vorschlaege.length === 0) {
+        waTauschSection.classList.add("hidden");
+        return;
+    }
+    waTauschSection.classList.remove("hidden");
+
+    waTauschList.innerHTML = vorschlaege.map((v, idx) => {
+        const fmt = (x) => (x > 0 ? "+" : "") + x;
+        const b = v.balance_hinweis;
+        const balanceText = `Geschl.: ${fmt(b.geschlecht_a_klasse_diff)}, Auff.: ${fmt(b.auff_a_klasse_diff)}, Mig.: ${fmt(b.migration_a_klasse_diff)}`;
+        return `<div class="wa-tausch">
+            <div class="wa-tausch-paar"><strong>${v.a.name}</strong> (${v.a.klasse}) ⇄ <strong>${v.b.name}</strong> (${v.b.klasse})</div>
+            <div class="wa-tausch-info">+${v.wuensche_gewinn} Wunsch-Treffer · <span class="muted">${balanceText}</span></div>
+            <button class="btn btn-primary wa-tausch-btn" data-a="${v.a.id}" data-b="${v.b.id}">Tausch durchführen</button>
+        </div>`;
+    }).join("");
+
+    waTauschList.querySelectorAll(".wa-tausch-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const a = parseInt(btn.dataset.a);
+            const b = parseInt(btn.dataset.b);
+            await fuehreTauschDurch(a, b);
+        });
+    });
+}
+
+async function fuehreTauschDurch(aId, bId) {
+    const einteilung = bauEinteilungAusDOM();
+    let klasseA = -1, klasseB = -1;
+    for (let i = 0; i < einteilung.length; i++) {
+        if (einteilung[i].includes(aId)) klasseA = i;
+        if (einteilung[i].includes(bId)) klasseB = i;
+    }
+    if (klasseA === -1 || klasseB === -1 || klasseA === klasseB) {
+        alert("Konnte einen der beiden Schüler nicht zuordnen.");
+        return;
+    }
+    einteilung[klasseA] = einteilung[klasseA].filter(s => s !== aId).concat(bId);
+    einteilung[klasseB] = einteilung[klasseB].filter(s => s !== bId).concat(aId);
+    await sendeVerschiebung(einteilung);
 }
 
 
@@ -1087,7 +1246,7 @@ async function sendeVerschiebung(neueEinteilung) {
         renderAmpel(data.pruefung);
         renderSummary(data.pruefung);
         renderPruefungTabelle(data.pruefung);
-        renderWuensche(data.pruefung);
+        renderWunschAnalyse(data.pruefung);
 
         data.klassen.forEach((klasse, idx) => {
             const card = document.querySelector(`.klasse-card[data-klasse-idx="${idx}"]`);

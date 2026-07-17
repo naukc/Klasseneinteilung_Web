@@ -1388,3 +1388,98 @@ tr.validierung-fehler td {
     padding: 0.2rem;
     font-size: 0.9rem;
 }
+
+
+/* === Wunsch-Analyse-Karte === */
+
+.wa-section {
+    margin-top: 1.5rem;
+}
+.wa-section:first-of-type {
+    margin-top: 0;
+}
+.wa-section h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text);
+    font-weight: 600;
+}
+.wa-section h4 .hint {
+    font-weight: normal;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.wa-filter {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+.wa-filter label {
+    cursor: pointer;
+}
+
+.wa-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px 4px 2px 0;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.wa-chip-erfuellt {
+    background: var(--info-bg);
+    color: var(--info-text);
+}
+.wa-chip-offen {
+    background: var(--auff-sehr-hoch-bg);
+    color: var(--auff-sehr-hoch-text);
+}
+
+.wa-cluster {
+    border-left: 4px solid var(--warning);
+    background: var(--bg-subtle);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+.wa-cluster-header {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+.wa-cluster-schueler {
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.wa-tausch {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 1rem;
+    align-items: center;
+}
+.wa-tausch-paar {
+    font-size: 1rem;
+    color: var(--text);
+}
+.wa-tausch-info {
+    font-size: 0.9rem;
+    grid-column: 1;
+    color: var(--text-muted);
+}
+.wa-tausch-btn {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+}
+
+.text-red {
+    color: var(--rot);
+}

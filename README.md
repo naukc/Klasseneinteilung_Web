@@ -28,6 +28,18 @@ Die App öffnet automatisch den Standard-Browser. Beim Schließen des Browser-Ta
 - **Laufpartner** – Kinder aus dem gleichen Sprengel werden bevorzugt zusammen eingeteilt
 - **Excel-Export** – Ergebnis als formatierte Excel-Datei herunterladen
 
+## Gespeicherte Einteilungen
+
+Dauerhaft gespeicherte Einteilungen werden als JSON-Dateien im OS-spezifischen AppData-Verzeichnis abgelegt (siehe `get_save_dir()` in `backend/pfade.py`):
+
+| Betriebssystem | Pfad |
+|---|---|
+| Windows | `%APPDATA%\Klasseneinteilung\saved_assignments\` |
+| macOS | `~/Library/Application Support/Klasseneinteilung/saved_assignments/` |
+| Linux | `~/.local/share/Klasseneinteilung/saved_assignments/` |
+
+Um eine Einteilung auf einen anderen Rechner zu übertragen, einfach die gewünschte `.json`-Datei kopieren und im entsprechenden Verzeichnis auf dem Zielsystem ablegen.
+
 ## Prüfungskriterien
 
 | Kriterium | Grün | Orange | Rot |
